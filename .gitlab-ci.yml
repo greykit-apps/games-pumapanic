@@ -3,11 +3,11 @@ stages:
 
 deploy:
   stage: deploy
-  image: alpine:latest
+  image: debian:bookworm-slim
   only:
     - main
   before_script:
-    - apk add --no-cache openssh rsync
+    - apt-get update -qq && apt-get install -y -qq openssh-client rsync > /dev/null 2>&1
     - mkdir -p ~/.ssh
     - cp "$DREAMHOST_SSH_KEY" ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
