@@ -11,6 +11,12 @@ deploy:
     - mkdir -p ~/.ssh
     - cp "$DREAMHOST_SSH_KEY" ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
+    - echo "--- DEBUG key info ---"
+    - wc -c ~/.ssh/id_rsa
+    - head -1 ~/.ssh/id_rsa
+    - tail -1 ~/.ssh/id_rsa
+    - ssh-keygen -l -f ~/.ssh/id_rsa || echo "ssh-keygen cannot read key"
+    - echo "--- END DEBUG ---"
     - ssh-keyscan -H "$DREAMHOST_HOST" >> ~/.ssh/known_hosts
   script:
     - rsync -avz --delete ./ ${DREAMHOST_USERNAME}@${DREAMHOST_HOST}:/home/${DREAMHOST_USERNAME}/pumapanic.greykit.com/
