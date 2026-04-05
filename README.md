@@ -1,6 +1,6 @@
 # PumaPanic
 
-**Cyber Castle Panic** — A single-player turn-based card game where you defend your network from cyber threats.
+**A cybersecurity tower-defense card game** — Defend your network from cyber threats in this single-player turn-based strategy game.
 
 Inspired by [Castle Panic](https://firesidegames.com/products/castle-panic-second-edition) by Justin De Witt, re-themed around IT security operations.
 
@@ -26,7 +26,7 @@ You win by defeating all threats in the deck with at least one server still stan
 
 ## Features
 
-- **Castle Panic mechanics** — Draw, discard, play, advance, spawn turn structure
+- **Classic tower-defense mechanics** — Draw, discard, play, advance, spawn turn structure
 - **14 card types** — Perimeter/Network/Endpoint defense, plus specials (Honeypot, Harden, Quarantine, Incident Commander, Contractor, Escalation, Threat Intel, Misconfigured)
 - **7 threat types** — Script Kiddies (1 HP), Malware (2 HP), APTs (3 HP), plus 4 boss threats with unique abilities
 - **4 event tokens** — Zero-Day Exploit, DDoS Attack, Coordinated Attack, Mass Campaign
