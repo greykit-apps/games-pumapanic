@@ -85,7 +85,7 @@ You win by defeating all threats in the deck with at least one server still stan
 
 ## Credits
 
-Game design and code by [shandower-421](https://github.com/shandower-421) with AI assistance from Claude.
+Game design and code by [shandower](https://gitlab.com/shandower) with AI assistance from Claude.
 
 Inspired by Castle Panic by Justin De Witt / Fireside Games.
 
