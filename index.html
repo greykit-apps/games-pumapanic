@@ -198,6 +198,9 @@ html, body {
 .discard-phase .card:hover .card-name { color: var(--crt-red); transition: color 0.15s; }
 .card.selected { border-color: var(--crt-amber); background: rgba(255,176,0,0.12); box-shadow: 0 0 16px rgba(255,176,0,0.25); transform: translateX(-4px); }
 .card.disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+.card.misconfig-discard { border: 2px solid var(--crt-red); background: rgba(255,51,51,0.18); box-shadow: 0 0 12px rgba(255,51,51,0.3); }
+.card.misconfig-discard .card-name { color: var(--crt-red); }
+.card.misconfig-discard:hover { background: rgba(255,51,51,0.28); box-shadow: 0 0 20px rgba(255,51,51,0.45); transform: translateX(2px); }
 /* Card enter animation */
 .card.card-enter { animation: card-slide-in 0.35s var(--ease-out-expo) both; }
 @keyframes card-slide-in {
@@ -489,7 +492,7 @@ const EFFECT_TYPES = {
    ============================================================ */
 
 const SLIDER_DEFS = {
-  handSize:     { label: "Hand Size",          min: 4, max: 6, default: 5, unit: " cards",  harder: false, desc: "Cards drawn each turn" },
+  handSize:     { label: "Hand Size",          min: 5, max: 8, default: 5, unit: " cards",  harder: false, desc: "Cards drawn each turn" },
   discardLimit: { label: "Discard Limit",      min: 1, max: 3, default: 1, unit: "",        harder: false, desc: "Cards you can swap per turn", hidden: true },
   misconfigs:   { label: "Misconfigurations",  min: 0, max: 5, default: 2, unit: " dead",   harder: true,  desc: "Useless cards in the deck" },
   waveSize:     { label: "Total Threats",       min: 20, max: 60, default: 40, unit: "",     harder: true,  desc: "Enemies in the threat deck", step: 5 },
@@ -2300,7 +2303,10 @@ function updateHand() {
     el.className = "card";
     el.dataset.cardId = card._uid;
     if (i === selectedCardIdx) el.classList.add("selected");
-    if (card.type === "misconfig") el.classList.add("disabled");
+    if (card.type === "misconfig") {
+      if (G.phase === "discard") el.classList.add("misconfig-discard");
+      else el.classList.add("disabled");
+    }
 
     // Ring badge
     let ringBadge = "";
