@@ -2291,12 +2291,6 @@ function updateHand() {
     const sortKey = cardSortKey(card);
     const group = Math.floor(sortKey / 10);
 
-    // Add separator between groups
-    if (lastGroup !== -1 && group !== lastGroup) {
-      const sep = document.createElement("div");
-      sep.style.cssText = "height:1px;background:var(--crt-border);margin:2px 0;";
-      container.appendChild(sep);
-    }
     lastGroup = group;
 
     const el = document.createElement("div");
