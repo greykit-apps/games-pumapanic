@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="12" fill="#0a0a0a"/>
+  <!-- Two cards, because this is a card game before it is a tower-defense
+       game, and a stack of cards is a silhouette no sibling shares. The alert
+       glyph is drawn as solids rather than a "!" glyph so no font is involved. -->
+  <rect x="28" y="9" width="25" height="37" rx="3" fill="#0f1a0f" stroke="#009926" stroke-width="2"/>
+  <rect x="11" y="17" width="29" height="41" rx="3.5" fill="#08120a" stroke="#00ff41" stroke-width="2.5"/>
+  <g fill="#00ff41">
+    <rect x="22.5" y="26" width="6" height="16" rx="3"/>
+    <circle cx="25.5" cy="49" r="3.4"/>
+  </g>
+</svg>
