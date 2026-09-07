@@ -369,8 +369,12 @@ html, body {
 #announcements { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
 
 @media (max-width: 768px) {
-  #game-container { grid-template-columns: 1fr; grid-template-areas: "hud-top" "canvas"; }
-  #sidebar { display: none; }
+  html, body { height: auto; min-height: 100%; overflow: auto; }
+  #game-container { height: auto; min-height: 100vh; grid-template-rows: auto auto auto; grid-template-columns: 1fr; grid-template-areas: "hud-top" "canvas" "sidebar"; }
+  #hud-top { flex-wrap: wrap; gap: 6px; }
+  #canvas-wrap { width: 100%; height: auto; aspect-ratio: 1; }
+  #sidebar { max-height: none; border-left: none; border-top: 1px solid var(--crt-border); }
+  #siem-log { max-height: 220px; }
 }
 </style>
 <link rel="icon" type="image/svg+xml" href="icon.svg">
@@ -382,7 +386,7 @@ html, body {
     <span class="title">PumaPanic</span>
     <div class="stats">
       <div class="stat"><span class="stat-label">Turn</span><span class="stat-value" id="stat-turn">0</span></div>
-      <div class="stat"><span class="stat-label">Threats Left</span><span class="stat-value" id="stat-threats">49</span></div>
+      <div class="stat"><span class="stat-label">Tokens Left</span><span class="stat-value" id="stat-threats">49</span></div>
       <div class="stat"><span class="stat-label">Servers</span><span class="stat-value" id="stat-servers">6/6</span></div>
       <div class="stat"><span class="stat-label">Slain</span><span class="stat-value" id="stat-slain">0</span></div>
     </div>
@@ -420,9 +424,16 @@ html, body {
 </div>
 <div id="announcements" aria-live="polite" aria-atomic="false"></div>
 
+
 <script>
 /* ============================================================
    CONSTANTS
+   The rules mirror the Castle Panic base game one-for-one.
+   Theme mapping: Forest→Internet, Archer→Perimeter, Knight→Network,
+   Swordsman→Endpoint, Castle→Core, Wall→Firewall, Tower→Server,
+   Goblin→Script Kiddie, Orc→Malware, Troll→APT.
+   Anything that is NOT in the base game is an add-on, switched on
+   through the house-rules panel (see SLIDER_DEFS below).
    ============================================================ */
 const CANVAS_SIZE = 800;
 const CENTER = 400;
@@ -438,166 +449,172 @@ const ARCS = [
   { id: 5, name: "Executive",   color: "#ffbb55", pairColor: "#cc7722", pairIdx: 2 },
 ];
 
-// Rings from outer to inner
+// Rings from outer to inner. Ring 4 is the Core (the Castle ring).
 const RINGS = [
   { id: 0, name: "Internet",  outer: 370, inner: 300 },
   { id: 1, name: "Perimeter", outer: 300, inner: 230 },
   { id: 2, name: "Network",   outer: 230, inner: 160 },
   { id: 3, name: "Endpoint",  outer: 160, inner: 95 },
 ];
+const CORE_RING = 4;
 const CORE_RADIUS = 95;
 const FIREWALL_RADIUS = 95; // on the Endpoint/Core boundary
 
-// Card types
-const CARD_TYPES = {
-  perimeterDef: { name: "Perimeter Def", ring: 1, segment: "pair", damage: 1, desc: "Hit 1 threat in Perimeter ring, matching segment pair" },
-  networkDef:   { name: "Network Def",   ring: 2, segment: "pair", damage: 1, desc: "Hit 1 threat in Network ring, matching segment pair" },
-  endpointDef:  { name: "Endpoint Def",  ring: 3, segment: "pair", damage: 1, desc: "Hit 1 threat in Endpoint ring, matching segment pair" },
-  firewallRule: { name: "Firewall Rule", ring: 1, segment: "any",  damage: 1, desc: "Hit 1 threat in Perimeter ring, any segment" },
-  networkACL:   { name: "Network ACL",   ring: 2, segment: "any",  damage: 1, desc: "Hit 1 threat in Network ring, any segment" },
-  hostPatch:    { name: "Host Patch",    ring: 3, segment: "any",  damage: 1, desc: "Hit 1 threat in Endpoint ring, any segment" },
-  incidentCmd:  { name: "Incident Cmdr", ring: -1, segment: "any", damage: 1, desc: "Hit 1 threat in any single ring, any segment" },
-  contractor:   { name: "Contractor",    ring: -2, segment: "any", damage: 1, desc: "Hit any 1 threat anywhere on the board" },
-  honeypot:     { name: "Honeypot",      ring: -3, segment: "any", damage: 0, desc: "Prevent 1 threat from advancing this turn" },
-  harden:       { name: "Harden",        ring: -4, segment: "any", damage: 0, desc: "Rebuild 1 destroyed firewall" },
-  quarantine:   { name: "Quarantine",    ring: -5, segment: "any", damage: 0, desc: "Push 1 threat back 1 ring (toward Internet)" },
-  threatIntel:  { name: "Threat Intel",  ring: -6, segment: "any", damage: 1, desc: "Hit 1 threat; if slain, draw 1 extra card" },
-  escalation:   { name: "Escalation",    ring: -7, segment: "any", damage: 2, desc: "Deal 2 damage to 1 threat in any ring you can target" },
-  misconfig:    { name: "Misconfigured", ring: -99, segment: "none", damage: 0, desc: "This card does nothing. Discard it." },
-};
+function ringName(r) { return r === CORE_RING ? "Core" : RINGS[r].name; }
 
-// Segment pairing: cards cover 2 arcs each (like Castle Panic's color covering 2 numbers)
+// Segment pairing: cards cover 2 arcs each (Castle Panic's colour covering 2 numbers)
 const SEGMENT_PAIRS = [[0,1],[2,3],[4,5]]; // DMZ+Web, Corp+Eng, Fin+Exec
 const PAIR_NAMES = ["DMZ/Web","Corp/Eng","Fin/Exec"];
 
-// Threat types
-const THREAT_TYPES = {
-  scriptKiddie: { name: "Script Kiddie", glyph: "SK", hp: 1, color: "#33ff33", boss: false, sides: 0 },   // circle
-  malware:      { name: "Malware",       glyph: "MW", hp: 2, color: "#ff6633", boss: false, sides: 4 },   // diamond
-  apt:          { name: "APT",           glyph: "AP", hp: 3, color: "#ff3333", boss: false, sides: 6 },   // hexagon
-  botnetCmd:    { name: "Botnet Cmdr",   glyph: "BC", hp: 3, color: "#ff00ff", boss: true,  sides: 8, ability: "Spawns 2 Script Kiddies in same arc" },
-  ransomware:   { name: "Ransomware",    glyph: "RW", hp: 3, color: "#ff0066", boss: true,  sides: 8, ability: "Destroys 1 firewall on spawn" },
-  nationState:  { name: "Nation State",  glyph: "NS", hp: 4, color: "#cc0000", boss: true,  sides: 8, ability: "Immune to Perimeter cards" },
-  supplyChain:  { name: "Supply Chain",  glyph: "SC", hp: 2, color: "#ff9900", boss: true,  sides: 8, ability: "Heals all threats in same arc by 1 HP" },
+// Card types. The Castle Panic card each one mirrors is in the trailing comment.
+//   kind: hit (damage), slay (kill outright), push (back to Internet), hold (skip next move),
+//         fortify (firewall takes 2 hits), build (two-card firewall rebuild), draw, scavenge, dead
+//   ring: 1/2/3 = that ring (3 also reaches the Core), "outer" = rings 1-3, "any" = rings 1-4
+const CARD_TYPES = {
+  perimeterDef: { name: "Perimeter Def", kind: "hit", damage: 1, ring: 1, segment: "pair", desc: "1 damage to a threat in the Perimeter ring, matching segment pair" },        // Archer (colour)
+  networkDef:   { name: "Network Def",   kind: "hit", damage: 1, ring: 2, segment: "pair", desc: "1 damage to a threat in the Network ring, matching segment pair" },          // Knight (colour)
+  endpointDef:  { name: "Endpoint Def",  kind: "hit", damage: 1, ring: 3, segment: "pair", desc: "1 damage to a threat in the Endpoint ring or Core, matching segment pair" }, // Swordsman (colour)
+  firewallRule: { name: "Firewall Rule", kind: "hit", damage: 1, ring: 1, segment: "any",  desc: "1 damage to a threat in the Perimeter ring, any segment" },                 // Any Colour Archer
+  networkACL:   { name: "Network ACL",   kind: "hit", damage: 1, ring: 2, segment: "any",  desc: "1 damage to a threat in the Network ring, any segment" },                   // Any Colour Knight
+  hostPatch:    { name: "Host Patch",    kind: "hit", damage: 1, ring: 3, segment: "any",  desc: "1 damage to a threat in the Endpoint ring or Core, any segment" },          // Any Colour Swordsman
+  incidentCmd:  { name: "Incident Cmdr", kind: "hit", damage: 1, ring: "any", segment: "pair", desc: "1 damage to a threat in any ring, matching segment pair" },            // Hero (colour)
+  contractor:   { name: "Contractor",    kind: "slay", ring: "any",   segment: "any", desc: "Eliminate 1 threat anywhere on the board (not the Internet)" },                  // Barbarian
+  sinkhole:     { name: "Sinkhole",      kind: "slay", ring: "outer", segment: "any", desc: "Eliminate 1 threat in the Perimeter, Network or Endpoint ring" },                // Nice Shot
+  quarantine:   { name: "Quarantine",    kind: "push", ring: "any",   segment: "any", desc: "Send 1 threat back to the Internet ring" },                                     // Drive Him Back
+  honeypot:     { name: "Honeypot",      kind: "hold", ring: "any",   segment: "any", desc: "1 threat does not move during the next Advance" },                              // Tar
+  harden:       { name: "Harden",        kind: "fortify", desc: "Reinforce 1 standing firewall so it takes 2 hits to destroy" },                                             // Fortify Wall
+  hardware:     { name: "Hardware",      kind: "build", partner: "config",   desc: "Play with a Config card: rebuild 1 destroyed firewall in front of a standing server" },  // Brick
+  config:       { name: "Config",        kind: "build", partner: "hardware", desc: "Play with a Hardware card: rebuild 1 destroyed firewall in front of a standing server" }, // Mortar
+  threatIntel:  { name: "Threat Intel",  kind: "draw", desc: "Draw 2 cards" },                                                                                              // Draw 2
+  forensics:    { name: "Forensics",     kind: "scavenge", desc: "Take any 1 card from the discard pile into your hand" },                                                  // Scavenge
+  // Add-ons — not in the base game, enabled via house rules
+  escalation:   { name: "Escalation",    kind: "hit", damage: 2, ring: "outer", segment: "any", addon: true, desc: "2 damage to a threat in the Perimeter, Network or Endpoint ring" },
+  misconfig:    { name: "Misconfigured", kind: "dead", addon: true, desc: "This card does nothing. Discard it." },
 };
 
-const EFFECT_TYPES = {
-  zeroDay:       { name: "Zero-Day Exploit",   desc: "All threats advance 1 extra ring!" },
-  ddos:          { name: "DDoS Attack",         desc: "Destroys 1 random firewall and the server behind it!" },
-  coordinated:   { name: "Coordinated Attack",  desc: "Draw 3 more threat tokens!" },
-  massCampaign:  { name: "Mass Campaign",       desc: "Draw 4 more threat tokens!" },
+// Threat types. hp is the number of hits to slay.
+const THREAT_TYPES = {
+  scriptKiddie: { name: "Script Kiddie", glyph: "SK", hp: 1, color: "#33ff33", boss: false, sides: 0 },   // Goblin — circle
+  malware:      { name: "Malware",       glyph: "MW", hp: 2, color: "#ff6633", boss: false, sides: 4 },   // Orc — diamond
+  apt:          { name: "APT",           glyph: "AP", hp: 3, color: "#ff3333", boss: false, sides: 6 },   // Troll — hexagon
+  botnetCmd:    { name: "Botnet Cmdr",   glyph: "BC", hp: 3, color: "#ff00ff", boss: true,  sides: 8, onSpawn: "draw3", ability: "On arrival, draw 3 more tokens" },          // Goblin King
+  ransomware:   { name: "Ransomware",    glyph: "RW", hp: 3, color: "#ff0066", boss: true,  sides: 8, onSpawn: "draw4", ability: "On arrival, draw 4 more tokens" },          // Orc Warlord
+  supplyChain:  { name: "Supply Chain",  glyph: "SC", hp: 3, color: "#ff9900", boss: true,  sides: 8, onSpawn: "heal",  ability: "On arrival, every threat on the board heals 1 HP" }, // Troll Mage
+  // Add-on
+  nationState:  { name: "Nation State",  glyph: "NS", hp: 4, color: "#cc0000", boss: true,  sides: 8, addon: true, immunePerimeter: true, ability: "Immune to Perimeter-ring cards" },
 };
+
+// Event tokens. The Castle Panic token each one mirrors is in the trailing comment.
+const EFFECT_TYPES = {
+  outagePerimeter: { name: "Outage: Perimeter", desc: "Perimeter team is down — discard every Perimeter card in your hand", plagueRing: 1 },   // Plague: Archers
+  outageNetwork:   { name: "Outage: Network",   desc: "Network team is down — discard every Network card in your hand",     plagueRing: 2 },   // Plague: Knights
+  outageEndpoint:  { name: "Outage: Endpoint",  desc: "Endpoint team is down — discard every Endpoint card in your hand",   plagueRing: 3 },   // Plague: Swordsmen
+  ddos:            { name: "DDoS Attack",        desc: "One random segment is flooded: every threat in it is wiped out, then its firewall (or server) goes down" }, // Giant Boulder
+  coordinated:     { name: "Coordinated Attack", desc: "Draw 3 more tokens", extraDraws: 3 },                                                 // Draw 3 Monsters
+  massCampaign:    { name: "Mass Campaign",      desc: "Draw 4 more tokens", extraDraws: 4 },                                                 // Draw 4 Monsters
+  lateralCW:       { name: "Lateral Movement ↻", desc: "Every threat shifts one segment clockwise",         shift: 1 },                   // Move Clockwise
+  lateralCCW:      { name: "Lateral Movement ↺", desc: "Every threat shifts one segment counter-clockwise", shift: -1 },                  // Move Counter-clockwise
+  // Add-on
+  zeroDay:         { name: "Zero-Day Exploit",   desc: "Every threat in the Perimeter and Network rings surges 1 ring inward", addon: true },
+};
+
+// Base token deck: 49 tokens, mirroring the Castle Panic monster tokens.
+// Counts are from memory of the base game — adjust here if your copy differs.
+const BASE_TOKEN_MANIFEST = [
+  ["threat", "scriptKiddie", 12],
+  ["threat", "malware",      12],
+  ["threat", "apt",          10],
+  ["threat", "botnetCmd",     1],
+  ["threat", "ransomware",    1],
+  ["threat", "supplyChain",   1],
+  ["effect", "outagePerimeter", 1],
+  ["effect", "outageNetwork",   1],
+  ["effect", "outageEndpoint",  1],
+  ["effect", "ddos",            2],
+  ["effect", "coordinated",     2],
+  ["effect", "massCampaign",    1],
+  ["effect", "lateralCW",       2],
+  ["effect", "lateralCCW",      2],
+];
 
 /* ============================================================
    DIFFICULTY CONFIG — House Rules System
+   The "Standard" preset is the base game. Everything under
+   addon: true is an extra rule layered on top.
    ============================================================ */
-
 const SLIDER_DEFS = {
-  handSize:     { label: "Hand Size",          min: 5, max: 8, default: 5, unit: " cards",  harder: false, desc: "Cards drawn each turn" },
-  discardLimit: { label: "Discard Limit",      min: 1, max: 3, default: 1, unit: "",        harder: false, desc: "Cards you can swap per turn", hidden: true },
-  misconfigs:   { label: "Misconfigurations",  min: 0, max: 5, default: 2, unit: " dead",   harder: true,  desc: "Useless cards in the deck" },
-  waveSize:     { label: "Total Threats",       min: 20, max: 60, default: 40, unit: "",     harder: true,  desc: "Enemies in the threat deck", step: 5 },
-  maxEnemyLvl:  { label: "Max Enemy Level",    min: 1, max: 4, default: 4, unit: "",        harder: true,  desc: "1=SK only, 2=+MW, 3=+APT, 4=+Bosses", hidden: true,
-    labels: ["Script Kiddies", "+Malware", "+APTs", "+Bosses"] },
-  activeDef:    { label: "Active Defense",     min: 0, max: 2, default: 0, unit: " dmg",   harder: false, desc: "Bonus damage dealt back to a threat when it destroys a firewall",
-    labels: ["Off", "1 damage", "2 damage"] },
-  bosses:       { label: "Boss Threats",       min: 0, max: 1, default: 1, unit: "",      harder: true,  desc: "Include boss enemies with special abilities",
-    labels: ["Off", "On"], toggle: true },
-  events:       { label: "Event Tokens",       min: 0, max: 1, default: 1, unit: "",      harder: true,  desc: "Include Zero-Day, DDoS, and other event cards",
-    labels: ["Off", "On"], toggle: true },
+  handSize:    { label: "Hand Size",         min: 4, max: 6, default: 6, unit: " cards", harder: false, desc: "Cards drawn each turn (base rule: 6 for a solo player)" },
+  bosses:      { label: "Boss Threats",      min: 0, max: 1, default: 1, toggle: true, labels: ["Off", "On"], harder: true,  desc: "Botnet Cmdr, Ransomware and Supply Chain in the token deck" },
+  events:      { label: "Event Tokens",      min: 0, max: 1, default: 1, toggle: true, labels: ["Off", "On"], harder: true,  desc: "Outages, DDoS, Coordinated Attack, Mass Campaign, Lateral Movement" },
+  // Add-ons
+  activeDef:   { label: "Active Defense",    min: 0, max: 2, default: 0, addon: true, harder: false, labels: ["Off", "+1 damage", "+2 damage"], desc: "Extra damage to a threat that hits a firewall or server (base rule: 1)" },
+  escalation:  { label: "Escalation Cards",  min: 0, max: 1, default: 0, addon: true, toggle: true, labels: ["Off", "On"], harder: false, desc: "2 extra cards that deal 2 damage in the outer rings" },
+  nationState: { label: "Nation State",      min: 0, max: 1, default: 0, addon: true, toggle: true, labels: ["Off", "On"], harder: true,  desc: "Extra 4 HP boss, immune to Perimeter cards (needs bosses on)" },
+  zeroDay:     { label: "Zero-Day Exploits", min: 0, max: 1, default: 0, addon: true, toggle: true, labels: ["Off", "On"], harder: true,  desc: "2 extra event tokens: outer threats surge 1 ring (needs events on)" },
+  misconfigs:  { label: "Misconfigurations", min: 0, max: 5, default: 0, addon: true, unit: " dead", harder: true, desc: "Dead cards shuffled into the deck" },
 };
 
 const DIFFICULTY_PRESETS = {
-  easy:   { label: "Beginner",  sliders: { handSize: 6, discardLimit: 1, misconfigs: 0, waveSize: 20, maxEnemyLvl: 3, activeDef: 2, bosses: 0, events: 0 } },
-  normal: { label: "Normal",    sliders: { handSize: 5, discardLimit: 1, misconfigs: 1, waveSize: 35, maxEnemyLvl: 4, activeDef: 1, bosses: 1, events: 1 } },
-  hard:   { label: "Hard",      sliders: { handSize: 5, discardLimit: 1, misconfigs: 2, waveSize: 50, maxEnemyLvl: 4, activeDef: 0, bosses: 1, events: 1 } },
+  easy:   { label: "Beginner", sliders: { handSize: 6, bosses: 0, events: 0, activeDef: 1, escalation: 1, nationState: 0, zeroDay: 0, misconfigs: 0 } },
+  normal: { label: "Standard", sliders: { handSize: 6, bosses: 1, events: 1, activeDef: 0, escalation: 0, nationState: 0, zeroDay: 0, misconfigs: 0 } },
+  hard:   { label: "Hard",     sliders: { handSize: 5, bosses: 1, events: 1, activeDef: 0, escalation: 0, nationState: 1, zeroDay: 1, misconfigs: 2 } },
 };
 
 // Active config — mutated by UI sliders
 let houseRules = { ...DIFFICULTY_PRESETS.normal.sliders };
 
-// Build a resolved config from house rules
 function resolveConfig() {
   const h = houseRules;
-  // Distribute waveSize across threat types based on maxEnemyLvl
-  let scriptKiddies, malware, apts, bosses, effects;
-  if (h.maxEnemyLvl === 1) {
-    scriptKiddies = h.waveSize;
-    malware = 0; apts = 0; bosses = 0; effects = 0;
-  } else if (h.maxEnemyLvl === 2) {
-    scriptKiddies = Math.round(h.waveSize * 0.6);
-    malware = h.waveSize - scriptKiddies;
-    apts = 0; bosses = 0; effects = 1;
-  } else if (h.maxEnemyLvl === 3) {
-    scriptKiddies = Math.round(h.waveSize * 0.45);
-    malware = Math.round(h.waveSize * 0.35);
-    apts = h.waveSize - scriptKiddies - malware;
-    bosses = 0; effects = h.events ? 2 : 0;
-  } else {
-    scriptKiddies = Math.round(h.waveSize * 0.38);
-    malware = Math.round(h.waveSize * 0.28);
-    apts = Math.round(h.waveSize * 0.15);
-    bosses = h.bosses ? 4 : 0;
-    effects = h.events ? 4 : 0;
-  }
-
   return {
     handSize: h.handSize,
-    discardLimit: h.discardLimit,
+    bosses: !!h.bosses,
+    events: !!h.events,
     activeDef: h.activeDef || 0,
-    misconfigCards: h.misconfigs,
-    extraSpecials: h.handSize >= 6 ? 1 : 0,
-    scriptKiddies,
-    malware,
-    apts,
-    bosses,
-    effects,
-    nothingTokens: Math.max(2, Math.round(h.waveSize * 0.12)),
-    threatsPerSpawn: 2,
-    startingThreats: h.waveSize <= 25 ? 4 : 6,
+    escalation: !!h.escalation,
+    nationState: !!h.nationState && !!h.bosses,
+    zeroDay: !!h.zeroDay && !!h.events,
+    misconfigCards: h.misconfigs || 0,
+    tokensPerSpawn: 2,
+    startingThreats: 6,
   };
 }
 
 /* ============================================================
    DECK BUILDERS
    ============================================================ */
+// Base deck: 49 cards, mirroring the Castle Panic deck.
+// Counts are from memory of the base game — adjust here if your copy differs.
 function buildCardDeck(cfg) {
   const deck = [];
   let uid = 1;
-  // 9 each of perimeter/network/endpoint defense (3 per segment pair)
-  for (const ring of ["perimeterDef","networkDef","endpointDef"]) {
-    for (let p = 0; p < 3; p++) {
-      for (let i = 0; i < 3; i++) deck.push({ type: ring, pairIdx: p, _uid: uid++ });
-    }
+  const add = (type, n, extra) => { for (let i = 0; i < n; i++) deck.push({ type, ...(extra || {}), _uid: uid++ }); };
+  // 3 of each ring card per segment pair (27)
+  for (const ring of ["perimeterDef", "networkDef", "endpointDef"]) {
+    for (let p = 0; p < 3; p++) add(ring, 3, { pairIdx: p });
   }
-  // 3 each of any-segment ring cards
-  for (let i = 0; i < 3; i++) deck.push({ type: "firewallRule", _uid: uid++ });
-  for (let i = 0; i < 3; i++) deck.push({ type: "networkACL", _uid: uid++ });
-  for (let i = 0; i < 3; i++) deck.push({ type: "hostPatch", _uid: uid++ });
-  // Specials (base count + extra from difficulty)
-  const specials = ["incidentCmd","contractor","honeypot","harden","quarantine","threatIntel","escalation"];
-  const baseCounts = [2, 2, 3, 3, 2, 2, 2];
-  for (let s = 0; s < specials.length; s++) {
-    for (let i = 0; i < baseCounts[s] + cfg.extraSpecials; i++) deck.push({ type: specials[s], _uid: uid++ });
-  }
-  // Dead cards
-  for (let i = 0; i < cfg.misconfigCards; i++) deck.push({ type: "misconfig", _uid: uid++ });
+  // 1 any-segment card per ring (3)
+  add("firewallRule", 1); add("networkACL", 1); add("hostPatch", 1);
+  // 1 Incident Commander per segment pair (3)
+  for (let p = 0; p < 3; p++) add("incidentCmd", 1, { pairIdx: p });
+  // Specials (16)
+  add("contractor", 1); add("sinkhole", 1); add("quarantine", 1); add("honeypot", 1); add("harden", 1);
+  add("hardware", 4); add("config", 4); add("threatIntel", 2); add("forensics", 1);
+  // Add-ons
+  if (cfg.escalation) add("escalation", 2);
+  add("misconfig", cfg.misconfigCards);
   return deck;
 }
 
 function buildThreatDeck(cfg) {
   const deck = [];
-  for (let i = 0; i < cfg.scriptKiddies; i++) deck.push({ kind: "threat", type: "scriptKiddie" });
-  for (let i = 0; i < cfg.malware; i++) deck.push({ kind: "threat", type: "malware" });
-  for (let i = 0; i < cfg.apts; i++) deck.push({ kind: "threat", type: "apt" });
-  // Bosses — include first N boss types based on difficulty
-  const bossTypes = ["botnetCmd", "ransomware", "nationState", "supplyChain"];
-  for (let i = 0; i < cfg.bosses; i++) deck.push({ kind: "threat", type: bossTypes[i] });
-  // Effects — include first N effect types
-  const effectTypes = ["zeroDay", "ddos", "coordinated", "massCampaign"];
-  for (let i = 0; i < cfg.effects; i++) deck.push({ kind: "effect", type: effectTypes[i] });
-  // Nothing tokens
-  for (let i = 0; i < cfg.nothingTokens; i++) deck.push({ kind: "nothing" });
+  for (const [kind, type, n] of BASE_TOKEN_MANIFEST) {
+    if (kind === "threat" && THREAT_TYPES[type].boss && !cfg.bosses) continue;
+    if (kind === "effect" && !cfg.events) continue;
+    for (let i = 0; i < n; i++) deck.push({ kind, type });
+  }
+  // Add-ons
+  if (cfg.nationState) deck.push({ kind: "threat", type: "nationState" });
+  if (cfg.zeroDay) { deck.push({ kind: "effect", type: "zeroDay" }); deck.push({ kind: "effect", type: "zeroDay" }); }
   return deck;
 }
 
@@ -615,67 +632,81 @@ function shuffle(arr) {
 let G = null; // game state
 let canvas, ctx;
 let selectedCardIdx = null;
-let highlightedTargets = []; // [{ring, arc}]
-let animating = false; // true while event queue is processing
+let highlightedTargets = []; // [{ring, arc, threatId}]
+let animating = false;  // true while the event queue is processing
+let inputLock = false;  // true while a card is animating out of the hand
 
 // Animation state
 let eventQueue = [];
 let flashEffects = []; // {x, y, color, radius, life, maxLife}
-const ANIM_SPEED = 5; // lerp speed for ring transitions
+let queueTimer = null;   // pending processEventQueue timeout
+let pendingTimer = null; // pending phase-transition timeout
+
+// Drop every in-flight animation and timer so a new game starts clean.
+function resetRuntime() {
+  eventQueue = [];
+  animating = false;
+  inputLock = false;
+  flashEffects = [];
+  if (queueTimer) { clearTimeout(queueTimer); queueTimer = null; }
+  if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null; }
+}
+
+function rollArc() { return Math.floor(Math.random() * NUM_ARCS); }
+
+function makeThreat(type, ring, arc) {
+  const d = THREAT_TYPES[type];
+  return {
+    id: G.nextThreatId++,
+    type, ring, arc,
+    hp: d.hp, maxHp: d.hp,
+    honeypotted: false,
+    immunePerimeter: !!d.immunePerimeter,
+    animRing: ring, animScale: 1, animFlash: 0,
+  };
+}
 
 function newGame(presetId) {
   if (presetId && DIFFICULTY_PRESETS[presetId]) {
     houseRules = { ...DIFFICULTY_PRESETS[presetId].sliders };
   }
+  resetRuntime();
   const cfg = resolveConfig();
-
-  const cardDeck = shuffle(buildCardDeck(cfg));
-  const threatDeck = shuffle(buildThreatDeck(cfg));
 
   G = {
     phase: "draw",       // draw, discard, play, advance, spawn, gameover
     turn: 0,
     houseRules: { ...houseRules },
     diffConfig: cfg,
-    cardDeck: cardDeck,
+    cardDeck: shuffle(buildCardDeck(cfg)),
     cardDiscard: [],
     hand: [],
-    threatDeck: threatDeck,
-    threats: [],         // {id, type, ring, arc, hp, maxHp, honeypotted, immunePerimeter}
-    fwMaxHP: 1,
-    firewalls: Array(6).fill(1), // 1 HP — walls always fall in one hit (Castle Panic faithful)
+    threatDeck: shuffle(buildThreatDeck(cfg)),
+    threats: [],         // see makeThreat
+    firewalls: Array(6).fill(1), // 1 = standing, 0 = destroyed — a firewall falls in one hit
+    fortified: null,     // arc index of the one Hardened firewall, if any
     servers:   [true, true, true, true, true, true],
     nextThreatId: 1,
     slain: 0,
-    score: 0,
     discardsUsed: 0,
-    pendingEffects: [],
+    fwTargets: null,     // {mode: "fortify"|"build", arcs: [...], partnerIdx}
     log: [],
   };
 
-  // Draw initial hand (size varies by difficulty)
-  for (let i = 0; i < cfg.handSize; i++) drawCard();
+  const list = document.getElementById("log-list");
+  if (list) list.innerHTML = "";
+  prevHUDState = {};
+  prevPhase = null;
 
-  // Initial threat placement on Perimeter ring
-  const numStarting = Math.min(cfg.startingThreats, 6);
-  const setupPool = ["scriptKiddie","scriptKiddie","scriptKiddie","malware","malware","scriptKiddie"];
-  for (let arc = 0; arc < numStarting; arc++) {
-    const type = setupPool[arc % setupPool.length];
-    G.threats.push({
-      id: G.nextThreatId++,
-      type: type,
-      ring: 1, // Perimeter
-      arc: arc,
-      hp: THREAT_TYPES[type].hp,
-      maxHp: THREAT_TYPES[type].hp,
-      honeypotted: false,
-      immunePerimeter: false,
-      animRing: 1, animScale: 1, animFlash: 0,
-    });
+  // Setup: 2 Script Kiddies, 2 Malware, 2 APTs in the Perimeter ring, each at a rolled segment
+  const setupPool = shuffle(["scriptKiddie", "scriptKiddie", "malware", "malware", "apt", "apt"]);
+  for (let i = 0; i < cfg.startingThreats; i++) {
+    const t = makeThreat(setupPool[i % setupPool.length], 1, rollArc());
+    t.animScale = 0.1;
+    G.threats.push(t);
   }
 
   G.turn = 1;
-  G.phase = "draw";
   selectedCardIdx = null;
   highlightedTargets = [];
 
@@ -701,6 +732,8 @@ function drawThreatToken() {
   if (G.threatDeck.length === 0) return null;
   return G.threatDeck.pop();
 }
+
+function liveThreats() { return G.threats.filter(t => !t.dying); }
 
 /* ============================================================
    ANIMATION & EVENT QUEUE
@@ -766,9 +799,10 @@ function addFlash(x, y, color, radius) {
   flashEffects.push({ x, y, color, radius, life: 1, maxLife: 1 });
 }
 
-function animateCardOut(handIdx, mode, callback) {
+// Slide a card out of the hand. The card must already be removed from G.hand;
+// its DOM element is still on screen until the callback rebuilds the hand.
+function animateCardOut(card, mode, callback) {
   const container = document.getElementById("card-hand");
-  const card = G.hand[handIdx];
   const targetEl = card && card._uid
     ? container.querySelector(`.card[data-card-id="${card._uid}"]`)
     : null;
@@ -778,7 +812,8 @@ function animateCardOut(handIdx, mode, callback) {
     targetEl.classList.add(cls);
     targetEl.style.pointerEvents = "none";
     if (mode === "discard") sfxCardDiscard(); else sfxCardPlay();
-    setTimeout(callback, 280);
+    inputLock = true;
+    setTimeout(() => { inputLock = false; callback(); }, 280);
   } else {
     callback();
   }
@@ -797,6 +832,8 @@ function screenPulse(color, durationMs) {
 }
 
 function processEventQueue() {
+  queueTimer = null;
+  if (!G) { animating = false; return; }
   if (eventQueue.length === 0) {
     animating = false;
     return;
@@ -811,76 +848,9 @@ function processEventQueue() {
       updateAll();
       break;
 
-    case "advance": {
-      sfxAdvance();
+    case "move": {
       const t = G.threats.find(th => th.id === evt.threatId);
-      if (t) {
-        t.ring = evt.toRing;
-        // animRing stays at old value, lerp will smooth it
-      }
-      updateAll();
-      break;
-    }
-
-    case "advance_core": {
-      const t = G.threats.find(th => th.id === evt.threatId);
-      if (t) {
-        t.ring = 4;
-        t.arc = evt.newArc !== undefined ? evt.newArc : t.arc;
-      }
-      updateAll();
-      break;
-    }
-
-    case "honeypot": {
-      const t = G.threats.find(th => th.id === evt.threatId);
-      if (t) {
-        t.honeypotted = false;
-        t.animFlash = 0.8; // amber flash
-      }
-      log(evt.msg);
-      updateAll();
-      break;
-    }
-
-    case "destroy_firewall": {
-      // Decrement firewall HP
-      G.firewalls[evt.arc] = Math.max(0, G.firewalls[evt.arc] - 1);
-      const fwDead = G.firewalls[evt.arc] <= 0;
-      const angle = (evt.arc + 0.5) * ARC_ANGLE - Math.PI / 2;
-      const x = CENTER + Math.cos(angle) * FIREWALL_RADIUS;
-      const y = CENTER + Math.sin(angle) * FIREWALL_RADIUS;
-      addFlash(x, y, fwDead ? "#ff3333" : "#ffaa00", 25);
-      if (fwDead) sfxFirewallDestroyed();
-      log(fwDead ? evt.msg : evt.msg.replace("DESTROYED", "damaged"));
-      // Active Defense — firewall damages the attacker
-      const adDmg = G.diffConfig ? G.diffConfig.activeDef : 0;
-      if (adDmg > 0 && evt.threatId) {
-        const attacker = G.threats.find(th => th.id === evt.threatId);
-        if (attacker && !attacker.dying) {
-          attacker.hp -= adDmg;
-          attacker.animFlash = 1.0;
-          log(`Active Defense: firewall dealt ${adDmg} damage to ${THREAT_TYPES[attacker.type].name}!`);
-          if (attacker.hp <= 0) {
-            attacker.dying = true;
-            G.slain++;
-            log(`${THREAT_TYPES[attacker.type].name} destroyed by Active Defense!`);
-          }
-        }
-      }
-      updateAll();
-      break;
-    }
-
-    case "destroy_server": {
-      G.servers[evt.arc] = false;
-      sfxServerDestroyed();
-      const angle = (evt.arc + 0.5) * ARC_ANGLE - Math.PI / 2;
-      const r = CORE_RADIUS * 0.55;
-      const x = CENTER + Math.cos(angle) * r;
-      const y = CENTER + Math.sin(angle) * r;
-      addFlash(x, y, "#ff0000", 35);
-      log(evt.msg);
+      if (t) resolveMove(t);
       updateAll();
       break;
     }
@@ -888,17 +858,9 @@ function processEventQueue() {
     case "spawn_threat": {
       const tDef = THREAT_TYPES[evt.threatType];
       if (tDef.boss) sfxBossSpawn(); else sfxThreatSpawn();
-      const threat = {
-        id: G.nextThreatId++,
-        type: evt.threatType,
-        ring: 0,
-        arc: evt.arc,
-        hp: tDef.hp,
-        maxHp: tDef.hp,
-        honeypotted: false,
-        immunePerimeter: evt.threatType === "nationState",
-        animRing: 0, animScale: 0.1, animFlash: 0.6,
-      };
+      const threat = makeThreat(evt.threatType, 0, evt.arc);
+      threat.animScale = 0.1;
+      threat.animFlash = 0.6;
       G.threats.push(threat);
       log(evt.msg);
       updateAll();
@@ -912,55 +874,11 @@ function processEventQueue() {
       updateAll();
       break;
 
-    case "try_breach": {
-      // Castle Panic rules: wall always dies in one hit, threat advances to Core
-      const breachThreat = G.threats.find(th => th.id === evt.threatId);
-      if (!breachThreat || breachThreat.dying) break;
-
-      const bAngle = (evt.arc + 0.5) * ARC_ANGLE - Math.PI / 2;
-
-      if (G.firewalls[evt.arc] > 0) {
-        // Firewall destroyed — threat passes through
-        G.firewalls[evt.arc] = 0;
-        breachThreat.ring = 4;
-        const bx = CENTER + Math.cos(bAngle) * FIREWALL_RADIUS;
-        const by = CENTER + Math.sin(bAngle) * FIREWALL_RADIUS;
-        addFlash(bx, by, "#ff3333", 25);
-        sfxFirewallDestroyed();
-        log(`${evt.threatName} DESTROYED firewall in ${evt.arcName}!`);
-
-        // Active Defense — firewall deals damage on its way down
-        const bAdDmg = G.diffConfig ? G.diffConfig.activeDef : 0;
-        if (bAdDmg > 0 && !breachThreat.dying) {
-          breachThreat.hp -= bAdDmg;
-          breachThreat.animFlash = 1.0;
-          log(`Active Defense dealt ${bAdDmg} damage to ${evt.threatName}!`);
-          if (breachThreat.hp <= 0) {
-            breachThreat.dying = true;
-            G.slain++;
-            sfxSlain();
-            log(`${evt.threatName} destroyed by Active Defense!`);
-          }
-        }
-      } else if (G.servers[evt.arc]) {
-        // No firewall — hit server directly
-        G.servers[evt.arc] = false;
-        breachThreat.ring = 4;
-        sfxServerDestroyed();
-        const sr = CORE_RADIUS * 0.55;
-        addFlash(CENTER + Math.cos(bAngle) * sr, CENTER + Math.sin(bAngle) * sr, "#ff0000", 35);
-        log(`${evt.threatName} DESTROYED server in ${evt.arcName}!`);
-      } else {
-        // No firewall, no server — threat enters Core
-        breachThreat.ring = 4;
-      }
-      updateAll();
-      break;
-    }
-
     case "check_lose":
       if (G.servers.every(s => !s)) {
         G.phase = "gameover";
+        animating = false;
+        eventQueue = [];
         updateAll();
         setTimeout(() => showGameOver(false), 500);
         return; // stop processing queue
@@ -968,8 +886,10 @@ function processEventQueue() {
       break;
 
     case "check_win":
-      if (G.threatDeck.length === 0 && G.threats.length === 0) {
+      if (G.threatDeck.length === 0 && liveThreats().length === 0) {
         G.phase = "gameover";
+        animating = false;
+        eventQueue = [];
         updateAll();
         setTimeout(() => showGameOver(true), 500);
         return;
@@ -983,7 +903,7 @@ function processEventQueue() {
 
   // Schedule next event
   const delay = evt.delay || 150;
-  setTimeout(processEventQueue, delay);
+  queueTimer = setTimeout(processEventQueue, delay);
 }
 
 function enqueueAndProcess(events) {
@@ -991,6 +911,7 @@ function enqueueAndProcess(events) {
   animating = true;
   processEventQueue();
 }
+
 
 /* ============================================================
    FLAVOR TEXT
@@ -1165,11 +1086,12 @@ function sfxDraw() {
 
 /* ============================================================
    TURN PHASES
+   1 Draw up · 2 Discard & draw one · 3 Play cards · 4 Advance · 5 Spawn two tokens
    ============================================================ */
 function doDrawPhase() {
   G.phase = "draw";
   G.discardsUsed = 0;
-  const handSize = G.diffConfig ? G.diffConfig.handSize : 5;
+  const handSize = G.diffConfig ? G.diffConfig.handSize : 6;
   while (G.hand.length < handSize && (G.cardDeck.length > 0 || G.cardDiscard.length > 0)) {
     drawCard();
   }
@@ -1177,49 +1099,51 @@ function doDrawPhase() {
   // Auto-advance to discard phase
   G.phase = "discard";
   selectedCardIdx = null;
+  highlightedTargets = [];
+  G.fwTargets = null;
   updateAll();
 }
 
 function doDiscardCard(idx) {
-  const limit = G.diffConfig ? G.diffConfig.discardLimit || 1 : 1;
-  if (G.phase !== "discard" || G.discardsUsed >= limit) return;
-
-  // Animate the card out before removing
-  animateCardOut(idx, "discard", () => {
-    const card = G.hand.splice(idx, 1)[0];
-    G.cardDiscard.push(card);
-    drawCard();
-    G.discardsUsed++;
-    const remaining = limit - G.discardsUsed;
-    log(`Discarded ${getCardName(card)}, drew a new card.${remaining > 0 ? ` (${remaining} discard${remaining > 1 ? 's' : ''} left)` : ''}`);
-    selectedCardIdx = null;
-
-    if (G.discardsUsed >= limit) {
-      G.phase = "play";
-      log("All discards used. Play phase.");
-    }
-    updateAll();
-  });
+  if (G.phase !== "discard" || inputLock || G.discardsUsed >= 1) return;
+  const card = G.hand.splice(idx, 1)[0];
+  if (!card) return;
+  G.cardDiscard.push(card);
+  G.discardsUsed++;
+  drawCard();
+  log(`Discarded ${getCardName(card)}, drew a new card.`);
+  selectedCardIdx = null;
+  G.phase = "play";
+  animateCardOut(card, "discard", updateAll);
 }
 
 function skipDiscard() {
-  if (G.phase !== "discard") return;
+  if (G.phase !== "discard" || inputLock) return;
   G.phase = "play";
   selectedCardIdx = null;
   updateAll();
 }
 
 function endPlayPhase() {
-  if (G.phase !== "play" || animating) return;
+  if (G.phase !== "play" || animating || inputLock) return;
   G.phase = "advance";
-  selectedCardIdx = null;
-  highlightedTargets = [];
+  deselect();
   updateAll();
   // Small delay then advance
-  setTimeout(doAdvancePhase, 400);
+  pendingTimer = setTimeout(doAdvancePhase, 400);
 }
 
+function deselect() {
+  selectedCardIdx = null;
+  highlightedTargets = [];
+  if (G) G.fwTargets = null;
+}
+
+/* ============================================================
+   PLAYING CARDS
+   ============================================================ */
 function selectCard(idx) {
+  if (!G || inputLock || animating) return;
   if (G.phase === "discard") {
     doDiscardCard(idx);
     return;
@@ -1227,28 +1151,77 @@ function selectCard(idx) {
   if (G.phase !== "play") return;
 
   const card = G.hand[idx];
+  if (!card) return;
   const def = CARD_TYPES[card.type];
 
-  if (def.ring === -99) return; // misconfig, can't play
+  // Clicking the selected card again deselects it
+  if (selectedCardIdx === idx) { deselect(); updateAll(); return; }
+  deselect();
 
-  // Harden targets firewalls, not threats
-  if (card.type === "harden") {
-    const destroyed = G.firewalls.map((fw, i) => fw ? -1 : i).filter(i => i >= 0);
-    if (destroyed.length === 0) {
-      log("No destroyed firewalls to rebuild.");
+  switch (def.kind) {
+    case "dead":
+      log("Misconfigured cards do nothing. Discard one during the Discard phase.");
+      updateAll();
+      return;
+
+    case "draw": {
+      consumeCards([idx], "play");
+      let n = 0;
+      if (drawCard()) n++;
+      if (drawCard()) n++;
+      log(`Threat Intel: drew ${n} card${n === 1 ? "" : "s"}.`);
       return;
     }
-    selectedCardIdx = idx;
-    highlightedTargets = []; // clear threat targets
-    G.hardenTargets = destroyed; // store which firewalls can be rebuilt
-    updateAll();
-    return;
-  }
 
-  selectedCardIdx = idx;
-  G.hardenTargets = null;
-  highlightedTargets = getValidTargets(card);
-  updateAll();
+    case "scavenge":
+      if (G.cardDiscard.length === 0) {
+        log("The discard pile is empty — nothing to recover.");
+        updateAll();
+        return;
+      }
+      selectedCardIdx = idx;
+      updateAll();
+      showScavengeModal();
+      return;
+
+    case "fortify": {
+      const arcs = G.firewalls.map((fw, i) => (fw && G.fortified !== i) ? i : -1).filter(i => i >= 0);
+      if (arcs.length === 0) {
+        log("No standing firewall to harden.");
+        updateAll();
+        return;
+      }
+      selectedCardIdx = idx;
+      G.fwTargets = { mode: "fortify", arcs };
+      updateAll();
+      return;
+    }
+
+    case "build": {
+      const partnerIdx = G.hand.findIndex((c, i) => i !== idx && c.type === def.partner);
+      if (partnerIdx < 0) {
+        log(`${def.name} needs a ${CARD_TYPES[def.partner].name} card played with it to rebuild a firewall.`);
+        updateAll();
+        return;
+      }
+      const arcs = G.firewalls.map((fw, i) => (!fw && G.servers[i]) ? i : -1).filter(i => i >= 0);
+      if (arcs.length === 0) {
+        log("No destroyed firewall with a standing server behind it.");
+        updateAll();
+        return;
+      }
+      selectedCardIdx = idx;
+      G.fwTargets = { mode: "build", arcs, partnerIdx };
+      updateAll();
+      return;
+    }
+
+    default: // hit, slay, push, hold — target a threat on the board
+      selectedCardIdx = idx;
+      highlightedTargets = getValidTargets(card);
+      if (highlightedTargets.length === 0) log(`No valid target for ${getCardName(card)} right now.`);
+      updateAll();
+  }
 }
 
 function getValidTargets(card) {
@@ -1256,175 +1229,166 @@ function getValidTargets(card) {
   const targets = [];
 
   for (const t of G.threats) {
-    if (t.ring === 0) continue; // can't hit threats in Internet ring
-    if (t.hp <= 0 || t.dying) continue; // already dead, animating out
+    if (t.ring === 0) continue;          // nothing reaches the Internet ring
+    if (t.hp <= 0 || t.dying) continue;  // already dead, animating out
 
-    // Check ring matching
-    let ringMatch = false;
-    if (def.ring === -2) ringMatch = true; // contractor: any ring
-    else if (def.ring === -5) ringMatch = true; // quarantine: any ring
-    else if (def.ring === -3) ringMatch = true; // honeypot: any
-    else if (def.ring === -6) ringMatch = (t.ring >= 1 && t.ring <= 3); // threat intel: standard rings
-    else if (def.ring === -7) ringMatch = (t.ring >= 1 && t.ring <= 3); // escalation: standard rings
-    else if (def.ring === -1) ringMatch = true; // incident commander: picks ring
-    else ringMatch = (t.ring === def.ring);
+    let ringOk;
+    if (def.ring === "any") ringOk = t.ring >= 1;
+    else if (def.ring === "outer") ringOk = t.ring >= 1 && t.ring <= 3;
+    else ringOk = t.ring === def.ring || (def.ring === 3 && t.ring === CORE_RING); // Endpoint cards also reach the Core
+    if (!ringOk) continue;
 
-    if (!ringMatch) continue;
-
-    // Nation State immunity
+    // Nation State add-on: immune to Perimeter-ring cards
     if (t.immunePerimeter && def.ring === 1) continue;
 
-    // Check segment matching
     if (def.segment === "pair" && card.pairIdx !== undefined) {
-      const pair = SEGMENT_PAIRS[card.pairIdx];
-      if (!pair.includes(t.arc)) continue;
+      if (!SEGMENT_PAIRS[card.pairIdx].includes(t.arc)) continue;
     }
-    // "any" segment = no arc restriction
 
     targets.push({ ring: t.ring, arc: t.arc, threatId: t.id });
   }
   return targets;
 }
 
-function clickThreat(threatId) {
-  if (G.phase !== "play" || selectedCardIdx === null || animating) return;
-  if (!highlightedTargets.find(t => t.threatId === threatId)) return;
+// Remove cards from the hand into the discard pile, animating the first one out.
+function consumeCards(indices, mode) {
+  const lead = G.hand[indices[0]]; // the card the player clicked
+  const sorted = [...indices].sort((a, b) => b - a);
+  const cards = sorted.map(i => G.hand.splice(i, 1)[0]).filter(Boolean);
+  for (const c of cards) G.cardDiscard.push(c);
+  deselect();
+  animateCardOut(lead, mode || "play", updateAll);
+}
 
-  const card = G.hand[selectedCardIdx];
-  const def = CARD_TYPES[card.type];
-  const threat = G.threats.find(t => t.id === threatId);
-  if (!threat) return;
-
-  // Handle special cards
-  if (card.type === "honeypot") {
-    threat.honeypotted = true;
-    log(`Honeypot deployed on ${THREAT_TYPES[threat.type].name} in ${ARCS[threat.arc].name}.`);
-    const hpIdx = selectedCardIdx;
-    selectedCardIdx = null;
-    highlightedTargets = [];
-    animateCardOut(hpIdx, "play", () => {
-      G.hand.splice(hpIdx, 1);
-      G.cardDiscard.push(card);
-      updateAll();
-    });
-    return;
-  }
-
-  if (card.type === "quarantine") {
-    const oldRing = threat.ring;
-    threat.ring = Math.max(0, threat.ring - 1);
-    threat.animRing = oldRing;
-    if (threat.ring === 0) {
-      log(`Quarantined ${THREAT_TYPES[threat.type].name} — pushed back to the Internet!`);
-    } else {
-      log(`Quarantined ${THREAT_TYPES[threat.type].name} — pushed back to ${RINGS[threat.ring].name}.`);
-    }
-    const qIdx = selectedCardIdx;
-    selectedCardIdx = null;
-    highlightedTargets = [];
-    animateCardOut(qIdx, "play", () => {
-      G.hand.splice(qIdx, 1);
-      G.cardDiscard.push(card);
-      updateAll();
-    });
-    return;
-  }
-
-  // Damage card
-  const dmg = def.damage;
-  threat.hp -= dmg;
+// Apply damage to a threat and handle its death. Returns true if it died.
+function damageThreat(threat, dmg, source) {
   const tDef = THREAT_TYPES[threat.type];
-
-  // Hit flash + sound
+  threat.hp -= dmg;
   threat.animFlash = 1.0;
   const pos = getThreatPos(threat);
   addFlash(pos.x, pos.y, "#ffffff", 15);
   sfxHit();
 
+  const where = `${ARCS[threat.arc].name}/${ringName(threat.ring)}`;
   if (threat.hp <= 0) {
-    log(`${tDef.name} in ${ARCS[threat.arc].name}/${RINGS[threat.ring].name} SLAIN! (${getCardName(card)})`);
-    addFlash(pos.x, pos.y, tDef.color, 20);
-
-    // Mark as dying — renderLoop will shrink and remove
+    threat.hp = 0;
     threat.dying = true;
     threat.animScale = 1.0;
     G.slain++;
     sfxSlain();
+    addFlash(pos.x, pos.y, tDef.color, 20);
+    log(`${tDef.name} in ${where} SLAIN! (${source})`);
+    return true;
+  }
+  log(`${source} hit ${tDef.name} in ${where} for ${dmg} (${threat.hp}/${threat.maxHp} HP left).`);
+  return false;
+}
 
-    // Threat Intel bonus draw
-    if (card.type === "threatIntel") {
-      drawCard();
-      log("Threat Intel: drew an extra card!");
+function clickThreat(threatId) {
+  if (G.phase !== "play" || selectedCardIdx === null || animating || inputLock) return;
+  if (!highlightedTargets.find(t => t.threatId === threatId)) return;
+
+  const idx = selectedCardIdx;
+  const card = G.hand[idx];
+  const def = CARD_TYPES[card.type];
+  const threat = G.threats.find(t => t.id === threatId);
+  if (!threat) return;
+  const tName = THREAT_TYPES[threat.type].name;
+
+  switch (def.kind) {
+    case "hold":
+      threat.honeypotted = true;
+      log(`Honeypot deployed: ${tName} in ${ARCS[threat.arc].name} will not advance next turn.`);
+      break;
+    case "push": {
+      const oldRing = threat.ring;
+      threat.ring = 0;
+      threat.animRing = oldRing;
+      threat.honeypotted = false;
+      log(`Quarantined ${tName} — sent back to the Internet.`);
+      break;
     }
-  } else {
-    log(`${getCardName(card)} hit ${tDef.name} for ${dmg} (${threat.hp}/${threat.maxHp} HP left).`);
+    case "slay":
+      damageThreat(threat, threat.hp, getCardName(card));
+      break;
+    case "hit":
+      damageThreat(threat, def.damage, getCardName(card));
+      break;
   }
 
-  const playedIdx = selectedCardIdx;
-  selectedCardIdx = null;
-  highlightedTargets = [];
-
-  animateCardOut(playedIdx, "play", () => {
-    G.hand.splice(playedIdx, 1);
-    G.cardDiscard.push(card);
-    updateAll();
-  });
+  consumeCards([idx], "play");
 }
 
-function playHarden(idx) {
-  // Find a destroyed firewall to rebuild
-  const destroyed = G.firewalls.map((fw, i) => fw ? -1 : i).filter(i => i >= 0);
-  if (destroyed.length === 0) {
-    log("No destroyed firewalls to rebuild.");
-    return;
+// Harden / Hardware+Config: the player clicked a highlighted firewall slot
+function clickFirewall(arcIdx) {
+  if (G.phase !== "play" || selectedCardIdx === null || animating || inputLock) return;
+  const ft = G.fwTargets;
+  if (!ft || !ft.arcs.includes(arcIdx)) return;
+
+  const angle = (arcIdx + 0.5) * ARC_ANGLE - Math.PI / 2;
+  const fx = CENTER + Math.cos(angle) * FIREWALL_RADIUS;
+  const fy = CENTER + Math.sin(angle) * FIREWALL_RADIUS;
+
+  if (ft.mode === "fortify") {
+    G.fortified = arcIdx;
+    log(`Firewall in ${ARCS[arcIdx].name} hardened — it now takes 2 hits.`);
+    addFlash(fx, fy, "#00ff41", 20);
+    sfxHarden();
+    consumeCards([selectedCardIdx], "play");
+  } else if (ft.mode === "build") {
+    G.firewalls[arcIdx] = 1;
+    log(`Firewall in ${ARCS[arcIdx].name} rebuilt!`);
+    addFlash(fx, fy, "#00ff41", 20);
+    sfxHarden();
+    consumeCards([selectedCardIdx, ft.partnerIdx], "play");
   }
-  // Rebuild the first destroyed one (could add UI to pick)
-  const arcIdx = destroyed[0];
-  G.firewalls[arcIdx] = G.fwMaxHP || 1;
-  log(`Firewall in ${ARCS[arcIdx].name} rebuilt!`);
-
-  const card = G.hand.splice(idx, 1)[0];
-  G.cardDiscard.push(card);
-  selectedCardIdx = null;
-  updateAll();
 }
 
+// Forensics: pick any card from the discard pile
+function showScavengeModal() {
+  const content = document.getElementById("modal-content");
+  content.dataset.dismissable = "true";
+  const items = G.cardDiscard.map((c, i) =>
+    `<button class="action-btn" style="font-size:11px;padding:4px 10px;margin:2px;" onclick="pickScavenge(${i})">${getCardName(c)}</button>`
+  ).join("");
+  content.innerHTML = `
+    <h2>Forensics</h2>
+    <p style="text-align:center;font-size:11px;margin-bottom:10px;">Recover one card from the discard pile.</p>
+    <div style="display:flex;flex-wrap:wrap;justify-content:center;max-height:50vh;overflow-y:auto;">${items}</div>
+    <div class="modal-actions">
+      <button class="action-btn" style="opacity:0.7" onclick="closeModal(); deselect(); updateAll();">Cancel</button>
+    </div>
+  `;
+  openModal();
+}
+
+function pickScavenge(discardIdx) {
+  closeModal();
+  if (!G || G.phase !== "play" || selectedCardIdx === null) return;
+  const fIdx = selectedCardIdx;
+  const forensics = G.hand[fIdx];
+  if (!forensics || CARD_TYPES[forensics.type].kind !== "scavenge") return;
+  const recovered = G.cardDiscard.splice(discardIdx, 1)[0];
+  if (!recovered) return;
+  G.hand.push(recovered);
+  log(`Forensics recovered ${getCardName(recovered)} from the discard pile.`);
+  consumeCards([fIdx], "play");
+}
+
+/* ============================================================
+   ADVANCE PHASE — every threat moves one step toward the Core
+   ============================================================ */
 function doAdvancePhase() {
+  pendingTimer = null;
   G.phase = "advance";
   updateAll();
 
   const queue = [];
   queue.push({ type: "log", msg: pick(FLAVOR.advance), delay: 300 });
 
-  // Build events for each threat (snapshot the list to avoid mutation issues)
-  const snapshot = [...G.threats];
-  for (const t of snapshot) {
-    const tName = THREAT_TYPES[t.type].name;
-    const arcName = ARCS[t.arc].name;
-
-    if (t.honeypotted) {
-      queue.push({ type: "honeypot", threatId: t.id, msg: `${tName} in ${arcName} trapped by honeypot — did not advance.`, delay: 400 });
-      continue;
-    }
-
-    if (t.ring === 3) {
-      // At Endpoint — try to breach. Resolved at event time so firewall HP is current.
-      queue.push({ type: "try_breach", threatId: t.id, arc: t.arc, threatName: tName, arcName: arcName, delay: 400 });
-    } else if (t.ring === 4) {
-      // In Core — rotate clockwise
-      const newArc = (t.arc + 1) % NUM_ARCS;
-      const newArcName = ARCS[newArc].name;
-      queue.push({ type: "advance_core", threatId: t.id, newArc: newArc, delay: 300 });
-      if (G.firewalls[newArc]) {
-        queue.push({ type: "destroy_firewall", arc: newArc, threatId: t.id, msg: `${tName} rotated and DESTROYED firewall in ${newArcName}!`, delay: 500 });
-      } else if (G.servers[newArc]) {
-        queue.push({ type: "destroy_server", arc: newArc, msg: `${tName} rotated and DESTROYED server in ${newArcName}!`, delay: 600 });
-      }
-    } else {
-      // Normal advance
-      queue.push({ type: "advance", threatId: t.id, toRing: t.ring + 1, delay: 200 });
-    }
-  }
+  // Innermost threats move first, so a Core threat rotates before an Endpoint threat breaches.
+  const order = liveThreats().sort((a, b) => b.ring - a.ring || a.id - b.id);
+  for (const t of order) queue.push({ type: "move", threatId: t.id, delay: 320 });
 
   queue.push({ type: "check_lose", delay: 300 });
   queue.push({ type: "callback", fn: doSpawnPhase, delay: 400 });
@@ -1432,20 +1396,95 @@ function doAdvancePhase() {
   enqueueAndProcess(queue);
 }
 
+// Resolved at event time so each move sees the board as the previous move left it.
+function resolveMove(t) {
+  if (t.dying) return;
+  const tName = THREAT_TYPES[t.type].name;
+
+  if (t.honeypotted) {
+    t.honeypotted = false;
+    t.animFlash = 0.8;
+    log(`${tName} in ${ARCS[t.arc].name} is stuck in the honeypot — did not advance.`);
+    return;
+  }
+
+  if (t.ring < 3) {
+    t.ring++;
+    sfxAdvance();
+    return;
+  }
+
+  if (t.ring === 3) {
+    // At the Endpoint: hit the firewall, then the server, then slip into the Core
+    if (G.firewalls[t.arc] || G.servers[t.arc]) { hitStructure(t, t.arc, false); return; }
+    t.ring = CORE_RING;
+    sfxAdvance();
+    log(`${tName} slipped into the Core through ${ARCS[t.arc].name} — nothing left there to stop it.`);
+    return;
+  }
+
+  // In the Core: rotate clockwise and hit whatever stands in the next segment
+  t.arc = (t.arc + 1) % NUM_ARCS;
+  if (G.firewalls[t.arc] || G.servers[t.arc]) hitStructure(t, t.arc, true);
+  else log(`${tName} moved through the Core into ${ARCS[t.arc].name}.`);
+}
+
+// A threat damages the firewall (or, with no firewall, the server) in an arc,
+// and takes 1 damage for doing so — plus any Active Defense bonus.
+function hitStructure(t, arc, rotated) {
+  const tName = THREAT_TYPES[t.type].name;
+  const arcName = ARCS[arc].name;
+  const angle = (arc + 0.5) * ARC_ANGLE - Math.PI / 2;
+  const fx = CENTER + Math.cos(angle) * FIREWALL_RADIUS;
+  const fy = CENTER + Math.sin(angle) * FIREWALL_RADIUS;
+  const lead = rotated ? `${tName} rotated and` : tName;
+
+  if (G.firewalls[arc]) {
+    if (G.fortified === arc) {
+      G.fortified = null;
+      addFlash(fx, fy, "#ffaa00", 25);
+      sfxHit();
+      log(`${lead} hit the hardened firewall in ${arcName} — reinforcement lost, firewall holds.`);
+    } else {
+      G.firewalls[arc] = 0;
+      addFlash(fx, fy, "#ff3333", 25);
+      sfxFirewallDestroyed();
+      log(`${lead} DESTROYED the firewall in ${arcName}!`);
+    }
+  } else {
+    G.servers[arc] = false;
+    const sr = CORE_RADIUS * 0.42;
+    addFlash(CENTER + Math.cos(angle) * sr, CENTER + Math.sin(angle) * sr, "#ff0000", 35);
+    sfxServerDestroyed();
+    log(`${lead} DESTROYED the server in ${arcName}!`);
+  }
+
+  const dmg = 1 + (G.diffConfig ? G.diffConfig.activeDef : 0);
+  damageThreat(t, dmg, "Active Defense");
+}
+
+/* ============================================================
+   SPAWN PHASE — draw two tokens (more if a token says so)
+   ============================================================ */
 function doSpawnPhase() {
   G.phase = "spawn";
   updateAll();
 
-  // Pre-draw all tokens to build the queue (need to handle extra draws from effects)
+  // Pre-draw every token for this phase so the queue can be built up front.
+  // Extra draws granted by tokens simply come off the top next.
   const tokens = [];
-  let numDraws = G.diffConfig ? G.diffConfig.threatsPerSpawn : 2;
-  for (let i = 0; i < numDraws; i++) {
+  let draws = G.diffConfig ? G.diffConfig.tokensPerSpawn : 2;
+  while (draws > 0) {
     const token = drawThreatToken();
     if (!token) break;
+    draws--;
     tokens.push(token);
     if (token.kind === "effect") {
-      if (token.type === "coordinated") numDraws += 3;
-      else if (token.type === "massCampaign") numDraws += 4;
+      draws += EFFECT_TYPES[token.type].extraDraws || 0;
+    } else {
+      const d = THREAT_TYPES[token.type];
+      if (d.onSpawn === "draw3") draws += 3;
+      if (d.onSpawn === "draw4") draws += 4;
     }
   }
 
@@ -1453,23 +1492,17 @@ function doSpawnPhase() {
   queue.push({ type: "log", msg: pick(FLAVOR.spawn), delay: 400 });
 
   for (const token of tokens) {
-    if (token.kind === "nothing") {
-      queue.push({ type: "log", msg: pick(FLAVOR.allClear), delay: 300 });
-      continue;
-    }
-
     if (token.kind === "effect") {
       const eff = EFFECT_TYPES[token.type];
       queue.push({ type: "effect", msg: `EVENT: ${eff.name} — ${eff.desc}`, flashColor: "#ff6600", delay: 600 });
-      queue.push({ type: "callback", fn: () => resolveEffect(token.type), delay: 300 });
+      queue.push({ type: "callback", fn: () => resolveEffect(token.type), delay: 400 });
       continue;
     }
 
-    // Threat token
+    // Threat token: roll a segment, place in the Internet ring
     const tDef = THREAT_TYPES[token.type];
-    const arc = Math.floor(Math.random() * NUM_ARCS);
+    const arc = rollArc();
     const bossMsg = tDef.boss ? ` BOSS: ${tDef.ability}` : "";
-    // Boss intro flavor
     if (tDef.boss && FLAVOR.bossIntro[token.type]) {
       queue.push({ type: "log", msg: FLAVOR.bossIntro[token.type], delay: 400 });
     }
@@ -1481,37 +1514,13 @@ function doSpawnPhase() {
       delay: 500,
     });
 
-    // Boss abilities
-    if (token.type === "botnetCmd") {
-      for (let j = 0; j < 2; j++) {
-        queue.push({
-          type: "spawn_threat",
-          threatType: "scriptKiddie",
-          arc: arc,
-          msg: "Botnet spawned a Script Kiddie!",
-          delay: 300,
-        });
-      }
-    } else if (token.type === "ransomware") {
+    if (tDef.onSpawn === "heal") {
       queue.push({ type: "callback", fn: () => {
-        const fwTargets = G.firewalls.map((fw, i) => fw ? i : -1).filter(i => i >= 0);
-        if (fwTargets.length > 0) {
-          const t = fwTargets[Math.floor(Math.random() * fwTargets.length)];
-          const angle = (t + 0.5) * ARC_ANGLE - Math.PI / 2;
-          const x = CENTER + Math.cos(angle) * FIREWALL_RADIUS;
-          const y = CENTER + Math.sin(angle) * FIREWALL_RADIUS;
-          G.firewalls[t] = 0;
-          addFlash(x, y, "#ff3333", 25);
-          log(`Ransomware destroyed firewall in ${ARCS[t].name}!`);
-          updateAll();
-        }
-      }, delay: 400 });
-    } else if (token.type === "supplyChain") {
-      queue.push({ type: "callback", fn: () => {
+        let n = 0;
         for (const t of G.threats) {
-          if (t.arc === arc) t.hp = Math.min(t.hp + 1, t.maxHp);
+          if (!t.dying && t.hp < t.maxHp) { t.hp++; t.animFlash = 0.6; n++; }
         }
-        log(`Supply Chain healed all threats in ${ARCS[arc].name}!`);
+        log(`Supply Chain compromise: ${n} threat${n === 1 ? "" : "s"} healed 1 HP.`);
         updateAll();
       }, delay: 400 });
     }
@@ -1519,17 +1528,16 @@ function doSpawnPhase() {
 
   // End-of-spawn checks
   if (G.threatDeck.length === 0) {
-    queue.push({ type: "log", msg: "Threat deck empty. Survive remaining threats!", delay: 300 });
+    queue.push({ type: "log", msg: "Token deck empty. Survive what's left on the board!", delay: 300 });
   }
-  queue.push({ type: "check_win", delay: 200 });
   queue.push({ type: "check_lose", delay: 200 });
+  queue.push({ type: "check_win", delay: 200 });
   queue.push({ type: "callback", fn: () => {
     if (G.phase === "gameover") return;
     G.turn++;
     log(`=== TURN ${G.turn} ===`);
-    // Milestone callouts
     if (FLAVOR.milestone[G.turn]) log(FLAVOR.milestone[G.turn]);
-    if (G.threatDeck.length === 0 && G.threats.length > 0) log("Last threats on the field. This is it.");
+    if (G.threatDeck.length === 0 && liveThreats().length > 0) log("Last threats on the field. This is it.");
     doDrawPhase();
   }, delay: 300 });
 
@@ -1537,37 +1545,74 @@ function doSpawnPhase() {
 }
 
 function resolveEffect(type) {
+  const eff = EFFECT_TYPES[type];
+
+  if (eff.plagueRing) {
+    // Outage: discard every card of that ring (segment-pair and any-segment alike)
+    const dropped = G.hand.filter(c => CARD_TYPES[c.type].ring === eff.plagueRing);
+    G.hand = G.hand.filter(c => CARD_TYPES[c.type].ring !== eff.plagueRing);
+    for (const c of dropped) G.cardDiscard.push(c);
+    log(`${eff.name}: discarded ${dropped.length} card${dropped.length === 1 ? "" : "s"}.`);
+    screenPulse("#ff6600", 1000);
+    deselect();
+    updateAll();
+    return;
+  }
+
+  if (type === "ddos") {
+    // Giant Boulder: one segment is scoured — every threat in it dies, then the firewall or server falls
+    const arc = rollArc();
+    let killed = 0;
+    for (const t of G.threats) {
+      if (t.dying || t.arc !== arc) continue;
+      t.hp = 0; t.dying = true; t.animScale = 1.0; G.slain++; killed++;
+      const pos = getThreatPos(t);
+      addFlash(pos.x, pos.y, THREAT_TYPES[t.type].color, 20);
+    }
+    let structure = "";
+    if (G.firewalls[arc]) {
+      G.firewalls[arc] = 0;
+      if (G.fortified === arc) G.fortified = null;
+      structure = ", firewall DESTROYED";
+    } else if (G.servers[arc]) {
+      G.servers[arc] = false;
+      structure = ", server DESTROYED";
+    }
+    log(`DDoS flooded ${ARCS[arc].name}: ${killed} threat${killed === 1 ? "" : "s"} wiped out${structure}!`);
+    sfxDDoS();
+    screenPulse(structure.includes("server") ? "#ff0000" : "#ff6600", 1200);
+    updateAll();
+    return;
+  }
+
+  if (eff.shift) {
+    for (const t of G.threats) {
+      if (!t.dying) t.arc = (t.arc + eff.shift + NUM_ARCS) % NUM_ARCS;
+    }
+    log(`${eff.name}: every threat shifted one segment ${eff.shift > 0 ? "clockwise" : "counter-clockwise"}.`);
+    deselect();
+    updateAll();
+    return;
+  }
+
   if (type === "zeroDay") {
-    // All threats advance 1 extra ring
     let count = 0;
     for (const t of G.threats) {
       if (t.ring >= 1 && t.ring < 3 && !t.dying) {
         t.ring++;
-        t.animRing = t.ring - 1; // animate the jump
+        t.animRing = t.ring - 1;
         t.animFlash = 1.0;
         count++;
       }
     }
-    log(`ZERO-DAY EXPLOIT: ${count} threats surged forward!`);
+    log(`ZERO-DAY EXPLOIT: ${count} threat${count === 1 ? "" : "s"} surged forward!`);
     sfxZeroDay();
     screenPulse("#ff0000", 1500);
-  } else if (type === "ddos") {
-    const fwTargets = G.firewalls.map((fw, i) => fw > 0 ? i : -1).filter(i => i >= 0);
-    if (fwTargets.length > 0) {
-      const t = fwTargets[Math.floor(Math.random() * fwTargets.length)];
-      G.firewalls[t] = 0; // DDoS fully destroys
-      if (G.servers[t]) {
-        G.servers[t] = false;
-        log(`DDoS destroyed firewall AND server in ${ARCS[t].name}!`);
-        screenPulse("#ff0000", 1500);
-      } else {
-        log(`DDoS destroyed firewall in ${ARCS[t].name}!`);
-        screenPulse("#ff6600", 1000);
-      }
-    }
+    updateAll();
   }
-  // coordinated & massCampaign handled by extra draws in spawn loop
+  // coordinated & massCampaign are handled by the extra draws in doSpawnPhase
 }
+
 
 /* ============================================================
    RENDERING
@@ -1726,7 +1771,7 @@ function render() {
     if (G.firewalls[a]) {
       // Firewall icon — brick wall with 3D side panel
       const fw = 20, fh = 22, sd = 6;
-      const damaged = G.fwMaxHP > 1 && G.firewalls[a] < G.fwMaxHP;
+      const damaged = false;
       const fwStroke = damaged ? "#ddaa00" : "#00ff41";
       const fwFill = damaged ? "rgba(200, 160, 0, 0.2)" : "rgba(0, 200, 50, 0.2)";
       const fwSideFill = damaged ? "rgba(160, 130, 0, 0.15)" : "rgba(0, 150, 40, 0.15)";
@@ -1797,14 +1842,18 @@ function render() {
       ctx.fill();
       ctx.stroke();
 
-      // HP indicator (show if firewall has > 1 max HP)
-      if (G.fwMaxHP > 1) {
-        const fwHP = G.firewalls[a];
-        ctx.font = "bold 10px 'Courier New', monospace";
-        ctx.fillStyle = damaged ? "#ddaa00" : "#00ff41";
+      // Hardened firewall — extra outline plus a "2" badge
+      if (G.fortified === a) {
+        ctx.strokeStyle = "#ffb000";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([2, 2]);
+        ctx.strokeRect(-fw/2 - 4, -fh/2 - 4, fw + 8, fh + 8);
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#ffb000";
+        ctx.font = "bold 9px 'Courier New', monospace";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(fwHP, 0, 0);
+        ctx.fillText("x2", 0, fh/2 + 9);
       }
 
       ctx.restore();
@@ -1826,27 +1875,33 @@ function render() {
       ctx.stroke();
       ctx.restore();
 
-      // Harden target highlight
-      if (G.hardenTargets && G.hardenTargets.includes(a)) {
-        ctx.beginPath();
-        ctx.arc(x, y, 24, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(0, 255, 65, 0.7)";
-        ctx.lineWidth = 2.5;
-        ctx.setLineDash([5, 4]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.beginPath();
-        ctx.arc(x, y, 24, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(0, 255, 65, 0.06)";
-        ctx.fill();
-      }
+    }
+  }
+
+  // Firewall-slot highlights for Harden / Hardware+Config
+  if (G.fwTargets) {
+    for (const a of G.fwTargets.arcs) {
+      const angle = (a + 0.5) * ARC_ANGLE - Math.PI / 2;
+      const x = CENTER + Math.cos(angle) * FIREWALL_RADIUS;
+      const y = CENTER + Math.sin(angle) * FIREWALL_RADIUS;
+      ctx.beginPath();
+      ctx.arc(x, y, 24, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(0, 255, 65, 0.7)";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([5, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(x, y, 24, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0, 255, 65, 0.06)";
+      ctx.fill();
     }
   }
 
   // Draw servers (database cylinder — stacked ovals)
   for (let a = 0; a < NUM_ARCS; a++) {
     const angle = (a + 0.5) * ARC_ANGLE - Math.PI / 2;
-    const r = CORE_RADIUS * 0.55;
+    const r = CORE_RADIUS * 0.42;
     const x = CENTER + Math.cos(angle) * r;
     const y = CENTER + Math.sin(angle) * r;
     const w = 12, h = 20, ov = 5; // half-width, total height, oval ry
@@ -1970,7 +2025,7 @@ function getThreatPos(t) {
       r = r1;
     }
   } else {
-    r = CORE_RADIUS * 0.35;
+    r = CORE_RADIUS * 0.68;
   }
   // Offset if multiple threats in same position — spread along the arc
   const samePos = G.threats.filter(o => o.ring === t.ring && o.arc === t.arc && o.id < t.id && !o.dying).length;
@@ -2013,7 +2068,7 @@ function drawThreat(t) {
   const scale = t.animScale !== undefined ? Math.max(0, t.animScale) : 1;
   if (scale <= 0) return;
 
-  const r = (tDef.boss ? 22 : 18) * scale;
+  const r = (tDef.boss ? 22 : 18) * scale * (t.ring === CORE_RING ? 0.7 : 1);
   const sides = tDef.sides;
   // Diamond rotated 45 degrees looks better
   const rotation = sides === 4 ? 0 : -Math.PI / 2;
@@ -2097,7 +2152,6 @@ function getCanvasCoords(e) {
   // Account for object-fit: contain letterboxing
   const canvasAspect = canvas.width / canvas.height; // 1:1
   const rectAspect = rect.width / rect.height;
-
   let renderW, renderH, offsetX, offsetY;
   if (rectAspect > canvasAspect) {
     // Wider than tall — letterboxed on sides
@@ -2119,45 +2173,36 @@ function getCanvasCoords(e) {
   };
 }
 
+function modalOpen() {
+  return document.getElementById("modal-overlay").classList.contains("active");
+}
+
 function setupInput() {
   canvas.addEventListener("click", (e) => {
-    if (!G || G.phase !== "play" || selectedCardIdx === null || animating) return;
+    if (!G || G.phase !== "play" || selectedCardIdx === null || animating || inputLock) return;
     const { x, y } = getCanvasCoords(e);
 
-    // Harden mode — clicking destroyed firewalls
-    if (G.hardenTargets && G.hardenTargets.length > 0) {
-      for (const arcIdx of G.hardenTargets) {
+    // Firewall targeting (Harden, Hardware + Config)
+    if (G.fwTargets && G.fwTargets.arcs.length > 0) {
+      for (const arcIdx of G.fwTargets.arcs) {
         const angle = (arcIdx + 0.5) * ARC_ANGLE - Math.PI / 2;
         const fx = CENTER + Math.cos(angle) * FIREWALL_RADIUS;
         const fy = CENTER + Math.sin(angle) * FIREWALL_RADIUS;
-        const dist = Math.sqrt((x - fx) ** 2 + (y - fy) ** 2);
-        if (dist < 30) {
-          // Rebuild this firewall
-          G.firewalls[arcIdx] = G.fwMaxHP || 1;
-          log(`Firewall in ${ARCS[arcIdx].name} rebuilt!`);
-          addFlash(fx, fy, "#00ff41", 20);
-          sfxHarden();
-          const card = G.hand.splice(selectedCardIdx, 1)[0];
-          G.cardDiscard.push(card);
-          selectedCardIdx = null;
-          G.hardenTargets = null;
-          updateAll();
+        if (Math.hypot(x - fx, y - fy) < 30) {
+          clickFirewall(arcIdx);
           return;
         }
       }
       return; // clicked elsewhere, ignore
     }
 
-    // Normal threat targeting
+    // Threat targeting — only consider valid targets
     if (highlightedTargets.length === 0) return;
-
-    // Find clicked threat — only consider valid targets
     for (const ht of highlightedTargets) {
       const t = G.threats.find(th => th.id === ht.threatId);
       if (!t || t.dying) continue;
       const pos = getThreatPos(t);
-      const dist = Math.sqrt((x - pos.x) ** 2 + (y - pos.y) ** 2);
-      if (dist < 30) {
+      if (Math.hypot(x - pos.x, y - pos.y) < 30) {
         clickThreat(t.id);
         return;
       }
@@ -2166,20 +2211,28 @@ function setupInput() {
 
   // Keyboard
   document.addEventListener("keydown", (e) => {
-    if (e.key === "h" || e.key === "H") { showHowToPlay(); return; }
     if (e.key === "Escape") {
-      if (document.getElementById("modal-overlay").classList.contains("active")) { closeModal(); return; }
-      selectedCardIdx = null;
-      highlightedTargets = [];
-      if (G) G.hardenTargets = null;
-      updateAll();
+      if (modalOpen()) {
+        const content = document.getElementById("modal-content");
+        if (content.dataset.dismissable === "true") { closeModal(); deselect(); if (G) updateAll(); }
+        return;
+      }
+      deselect();
+      if (G) updateAll();
       return;
     }
+    if (e.key === "h" || e.key === "H") {
+      if (modalOpen() && document.getElementById("modal-content").dataset.help === "true") closeModal();
+      else if (!modalOpen()) showHowToPlay();
+      return;
+    }
+    if (modalOpen()) return; // never let game keys through a dialog
+    if (e.key === "m" || e.key === "M") { toggleMute(); return; }
     if (!G) return;
 
-    // Number keys select cards
+    // Number keys select cards (hand can grow past 6 via Threat Intel)
     const num = parseInt(e.key);
-    if (num >= 1 && num <= G.hand.length) {
+    if (num >= 1 && num <= 9 && num <= G.hand.length) {
       selectCard(num - 1);
       return;
     }
@@ -2208,7 +2261,7 @@ function updateAll() {
 function updateCanvasLabel() {
   const c = document.getElementById("game-canvas");
   if (!c || !G) return;
-  const threats = G.threats.filter(t => !t.dying).length;
+  const threats = liveThreats().length;
   const servers = G.servers.filter(Boolean).length;
   const fws = G.firewalls.filter(f => f > 0).length;
   c.setAttribute("aria-label",
@@ -2220,7 +2273,7 @@ let prevHUDState = {};
 function updateHUD() {
   const stats = {
     turn: G.turn,
-    threats: G.threatDeck.length,
+    tokens: G.threatDeck.length,
     servers: G.servers.filter(Boolean).length,
     slain: G.slain,
   };
@@ -2234,7 +2287,7 @@ function updateHUD() {
   }
 
   document.getElementById("stat-turn").textContent = stats.turn;
-  document.getElementById("stat-threats").textContent = stats.threats;
+  document.getElementById("stat-threats").textContent = stats.tokens;
   document.getElementById("stat-servers").textContent = stats.servers + "/6";
   document.getElementById("stat-slain").textContent = stats.slain;
 
@@ -2248,16 +2301,14 @@ function updateHUD() {
 
 function cardSortKey(card) {
   const def = CARD_TYPES[card.type];
-  // Segment: special/no-segment = 0, any-segment = 1, pair 0/1/2 = 2/3/4
+  // Segment group: specials first, then any-segment ring cards, then the three pairs
   let seg;
-  if (def.ring < 0) seg = 0; // special cards first
-  else if (def.segment === "any") seg = 1;
-  else seg = 2 + (card.pairIdx || 0);
-  // Ring: any = 0, endpoint = 1, network = 2, perimeter = 3 (most urgent first)
-  const ringOrder = { 3: 1, 2: 2, 1: 3 }; // endpoint, network, perimeter
-  let ring;
-  if (def.ring < 0) ring = 0;
-  else ring = ringOrder[def.ring] || 0;
+  if (def.segment === "pair") seg = 2 + (card.pairIdx || 0);
+  else if (def.segment === "any" && typeof def.ring === "number") seg = 1;
+  else seg = 0;
+  // Within a group: any-ring first, then Endpoint, Network, Perimeter (most urgent first)
+  const ringOrder = { 3: 1, 2: 2, 1: 3 };
+  const ring = typeof def.ring === "number" ? (ringOrder[def.ring] || 0) : 0;
   return seg * 10 + ring;
 }
 
@@ -2282,51 +2333,44 @@ function updateHand() {
   const indices = G.hand.map((_, i) => i);
   indices.sort((a, b) => cardSortKey(G.hand[a]) - cardSortKey(G.hand[b]));
 
-  // Track groups for visual separators
-  let lastGroup = -1;
   let newCardStagger = 0;
 
   for (const i of indices) {
     const card = G.hand[i];
     const def = CARD_TYPES[card.type];
-    const sortKey = cardSortKey(card);
-    const group = Math.floor(sortKey / 10);
-
-    lastGroup = group;
 
     const el = document.createElement("div");
     el.className = "card";
     el.dataset.cardId = card._uid;
     if (i === selectedCardIdx) el.classList.add("selected");
-    if (card.type === "misconfig") {
+    if (def.kind === "dead") {
       if (G.phase === "discard") el.classList.add("misconfig-discard");
       else el.classList.add("disabled");
     }
+    // The partner of a selected build card is shown as selected too
+    if (G.fwTargets && G.fwTargets.mode === "build" && i === G.fwTargets.partnerIdx) el.classList.add("selected");
 
     // Ring badge
     let ringBadge = "";
-    if (def.ring === 1) ringBadge = `<span class="card-badge badge-perimeter">\u25CE Perimeter</span>`;
-    else if (def.ring === 2) ringBadge = `<span class="card-badge badge-network">\u25CE Network</span>`;
-    else if (def.ring === 3) ringBadge = `<span class="card-badge badge-endpoint">\u25CE Endpoint</span>`;
-    else if (def.ring === -1) ringBadge = `<span class="card-badge badge-any-ring">\u25CE Any Ring</span>`;
-    else if (def.ring === -2) ringBadge = `<span class="card-badge badge-any-ring">\u25CE Anywhere</span>`;
-    else if (def.ring >= -7 && def.ring < 0 && def.ring !== -99) ringBadge = `<span class="card-badge badge-special">\u2606 Special</span>`;
+    if (def.ring === 1) ringBadge = `<span class="card-badge badge-perimeter">◎ Perimeter</span>`;
+    else if (def.ring === 2) ringBadge = `<span class="card-badge badge-network">◎ Network</span>`;
+    else if (def.ring === 3) ringBadge = `<span class="card-badge badge-endpoint">◎ Endpoint+Core</span>`;
+    else if (def.ring === "any") ringBadge = `<span class="card-badge badge-any-ring">◎ Any Ring</span>`;
+    else if (def.ring === "outer") ringBadge = `<span class="card-badge badge-any-ring">◎ Outer Rings</span>`;
+    else if (def.kind !== "dead") ringBadge = `<span class="card-badge badge-special">☆ Special</span>`;
 
     // Segment badge
     let segBadge = "";
     if (def.segment === "pair" && card.pairIdx !== undefined) {
-      segBadge = `<span class="card-badge ${segBadgeClass[card.pairIdx]}">\u25A0 ${PAIR_NAMES[card.pairIdx]}</span>`;
-    } else if (def.segment === "any" && def.ring > 0) {
-      segBadge = `<span class="card-badge badge-segment">\u25A0 Any Segment</span>`;
+      segBadge = `<span class="card-badge ${segBadgeClass[card.pairIdx]}">■ ${PAIR_NAMES[card.pairIdx]}</span>`;
+    } else if (def.segment === "any" && typeof def.ring === "number") {
+      segBadge = `<span class="card-badge badge-segment">■ Any Segment</span>`;
     }
 
     // Card description
-    let descText = "";
-    if (def.ring === -99) {
-      descText = `<span class="card-desc" style="color:var(--crt-red)">${def.desc}</span>`;
-    } else {
-      descText = `<span class="card-desc">${def.desc}</span>`;
-    }
+    const descText = def.kind === "dead"
+      ? `<span class="card-desc" style="color:var(--crt-red)">${def.desc}</span>`
+      : `<span class="card-desc">${def.desc}</span>`;
 
     el.innerHTML = `
       <span class="card-key">${i + 1}</span>
@@ -2407,10 +2451,10 @@ function updatePhaseUI() {
 
   const phases = {
     draw: ["Draw Phase", "Drawing cards to fill your hand..."],
-    discard: ["Discard Phase", "Click a card to discard and draw a replacement, or click Skip Discard."],
-    play: ["Play Phase", "Click a card, then click a threat on the board to attack. Click End Play Phase when done."],
-    advance: ["Threats Advancing", "All threats move 1 ring closer to your servers..."],
-    spawn: ["Spawning Threats", "New threats are emerging from the Internet..."],
+    discard: ["Discard Phase", "Click one card to discard it and draw a replacement, or click Skip Discard."],
+    play: ["Play Phase", "Click a card, then click a highlighted threat or firewall on the board. Click End Play Phase when done."],
+    advance: ["Threats Advancing", "Every threat moves 1 ring closer to your servers..."],
+    spawn: ["Drawing Tokens", "New threats are emerging from the Internet..."],
     gameover: ["Game Over", ""],
   };
 
@@ -2442,9 +2486,9 @@ function log(msg, level) {
 
   // Auto-detect level from message content if not specified
   if (!level) {
-    if (/DESTROYED|BREACH|ZERO-DAY|DDoS|destroyed.*server/i.test(msg)) level = "danger";
-    else if (/BOSS|Ransomware|Nation State|surged|Coordinated|Mass Campaign|EVENT:/i.test(msg)) level = "warn";
-    else if (/SLAIN|rebuilt|Quarantined|Active Defense/i.test(msg)) level = "good";
+    if (/DESTROYED|BREACH|ZERO-DAY|DDoS|slipped into the Core/i.test(msg)) level = "danger";
+    else if (/BOSS|Ransomware|Nation State|surged|Coordinated|Mass Campaign|EVENT:|Outage|Lateral/i.test(msg)) level = "warn";
+    else if (/SLAIN|rebuilt|hardened|Quarantined|recovered|holds/i.test(msg)) level = "good";
   }
 
   const list = document.getElementById("log-list");
@@ -2463,50 +2507,51 @@ function log(msg, level) {
 /* ============================================================
    MENUS & HOW TO PLAY
    ============================================================ */
+function renderRuleRow(key, def) {
+  const val = houseRules[key];
+  const step = def.step || 1;
+  const displayVal = def.labels ? def.labels[val - def.min] : val + (def.unit || "");
+  if (def.toggle) {
+    const isOn = val > 0;
+    return `
+      <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <div>
+          <span style="color:var(--crt-text-dim);font-size:12px;">${def.label}</span>
+          <div style="font-size:9px;color:var(--crt-text-dim);margin-top:1px;">${def.desc}</div>
+        </div>
+        <button onclick="updateSlider('${key}', ${isOn ? 0 : 1}); showMainMenu();"
+          style="padding:3px 12px;font-family:var(--font-mono);font-size:11px;cursor:pointer;border-radius:3px;flex-shrink:0;
+          border:1px solid ${isOn ? 'var(--crt-green-dim)' : 'var(--crt-red)'};
+          color:${isOn ? 'var(--crt-green)' : 'var(--crt-red)'};
+          background:${isOn ? 'rgba(0,255,65,0.1)' : 'rgba(255,51,51,0.1)'};">${isOn ? 'ON' : 'OFF'}</button>
+      </div>`;
+  }
+  return `
+    <div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+        <span style="color:var(--crt-text-dim)">${def.label}</span>
+        <span style="color:var(--crt-green);font-weight:bold;" id="slider-val-${key}">${displayVal}</span>
+      </div>
+      <input type="range" min="${def.min}" max="${def.max}" step="${step}" value="${val}"
+        style="width:100%;" oninput="updateSlider('${key}', this.value)" aria-label="${def.label}">
+      <div style="font-size:9px;color:var(--crt-text-dim);margin-top:1px;">${def.desc}</div>
+    </div>`;
+}
+
 function showMainMenu() {
-  const modal = document.getElementById("modal-overlay");
   const content = document.getElementById("modal-content");
   content.dataset.dismissable = "false";
-  // Build preset buttons
-  let presetBtns = Object.entries(DIFFICULTY_PRESETS).map(([id, p]) =>
+  content.dataset.help = "false";
+
+  const presetBtns = Object.entries(DIFFICULTY_PRESETS).map(([id, p]) =>
     `<button class="action-btn" style="font-size:10px;padding:4px 10px;" onclick="applyPreset('${id}')">${p.label}</button>`
   ).join("");
 
-  // Build slider HTML
-  let slidersHTML = "";
+  let baseHTML = "", addonHTML = "";
   for (const [key, def] of Object.entries(SLIDER_DEFS)) {
     if (def.hidden) continue;
-    const val = houseRules[key];
-    const step = def.step || 1;
-    const displayVal = def.labels ? def.labels[val - def.min] : val + (def.unit || "");
-    if (def.toggle) {
-      // Render as on/off toggle button
-      const isOn = val > 0;
-      slidersHTML += `
-        <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
-          <div>
-            <span style="color:var(--crt-text-dim);font-size:12px;">${def.label}</span>
-            <div style="font-size:9px;color:var(--crt-text-dim);margin-top:1px;">${def.desc}</div>
-          </div>
-          <button onclick="updateSlider('${key}', ${isOn ? 0 : 1}); showMainMenu();"
-            style="padding:3px 12px;font-family:var(--font-mono);font-size:11px;cursor:pointer;border-radius:3px;
-            border:1px solid ${isOn ? 'var(--crt-green-dim)' : 'var(--crt-red)'};
-            color:${isOn ? 'var(--crt-green)' : 'var(--crt-red)'};
-            background:${isOn ? 'rgba(0,255,65,0.1)' : 'rgba(255,51,51,0.1)'};">${isOn ? 'ON' : 'OFF'}</button>
-        </div>`;
-    } else {
-      slidersHTML += `
-        <div style="margin-bottom:10px;">
-          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
-            <span style="color:var(--crt-text-dim)">${def.label}</span>
-            <span style="color:var(--crt-green);font-weight:bold;" id="slider-val-${key}">${displayVal}</span>
-          </div>
-          <input type="range" min="${def.min}" max="${def.max}" step="${step}" value="${val}"
-            style="width:100%;" oninput="updateSlider('${key}', this.value)">
-        <div style="font-size:9px;color:var(--crt-text-dim);margin-top:1px;">${def.desc}</div>
-      </div>
-    `;
-    } // end else (slider vs toggle)
+    if (def.addon) addonHTML += renderRuleRow(key, def);
+    else baseHTML += renderRuleRow(key, def);
   }
 
   content.innerHTML = `
@@ -2514,29 +2559,34 @@ function showMainMenu() {
     <p style="text-align:center;margin-bottom:12px;">Cyber Tower Defense</p>
     <p style="text-align:center;font-size:11px;margin-bottom:14px;">
       Defend your servers from cyber threats!<br>
-      Play security cards to block attacks advancing through your network rings.
+      Play security cards to stop attacks advancing through your network rings.
     </p>
     <div style="display:flex;gap:4px;justify-content:center;margin-bottom:14px;flex-wrap:wrap;">
       ${presetBtns}
     </div>
     <div style="border-top:1px solid var(--crt-border);padding-top:12px;">
-      <h3 style="font-size:11px;color:var(--crt-amber);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">House Rules</h3>
-      <p style="font-size:9px;color:var(--crt-text-dim);margin-bottom:10px;font-style:italic;">For testing and development purposes. Game balance is not guaranteed with custom settings.</p>
-      ${slidersHTML}
+      <h3 style="font-size:11px;color:var(--crt-amber);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Base Rules</h3>
+      <p style="font-size:9px;color:var(--crt-text-dim);margin-bottom:10px;font-style:italic;">Standard is the full base game. Turning bosses or events off makes it easier.</p>
+      ${baseHTML}
+      <h3 style="font-size:11px;color:var(--crt-amber);text-transform:uppercase;letter-spacing:1px;margin:12px 0 4px;">Add-ons</h3>
+      <p style="font-size:9px;color:var(--crt-text-dim);margin-bottom:10px;font-style:italic;">Extra rules layered on top of the base game. Off by default.</p>
+      ${addonHTML}
     </div>
     <div class="modal-actions" style="margin-top:14px;">
       <button class="action-btn" onclick="closeModal(); newGame(); showTutorial();">Start Game</button>
-      <button class="action-btn" style="opacity:0.7" onclick="closeModal(); showHowToPlay();">How to Play</button>
+      <button class="action-btn" style="opacity:0.7" onclick="showHowToPlay();">How to Play</button>
     </div>
   `;
   openModal();
 }
 
 function showHowToPlay(tab) {
-  const modal = document.getElementById("modal-overlay");
   const content = document.getElementById("modal-content");
-  content.dataset.dismissable = "true";
+  // If no game is running, closing help returns to the main menu
+  content.dataset.dismissable = G ? "true" : "false";
+  content.dataset.help = "true";
   const activeTab = tab || "gameplay";
+  const closeAction = G ? "closeModal();" : "showMainMenu();";
 
   function tabCls(id) { return id === activeTab ? "help-tab active" : "help-tab"; }
   function panelCls(id) { return id === activeTab ? "help-tab-content active" : "help-tab-content"; }
@@ -2547,6 +2597,7 @@ function showHowToPlay(tab) {
       <button class="${tabCls("gameplay")}" onclick="showHowToPlay('gameplay')">Gameplay</button>
       <button class="${tabCls("cards")}" onclick="showHowToPlay('cards')">Cards</button>
       <button class="${tabCls("threats")}" onclick="showHowToPlay('threats')">Threats</button>
+      <button class="${tabCls("addons")}" onclick="showHowToPlay('addons')">Add-ons</button>
       <button class="${tabCls("tips")}" onclick="showHowToPlay('tips')">Tips</button>
       <button class="${tabCls("about")}" onclick="showHowToPlay('about')">About</button>
     </div>
@@ -2556,8 +2607,8 @@ function showHowToPlay(tab) {
       <div class="htp-section">
         <h4>Objective</h4>
         <ul>
-          <li>Defeat all threats before they destroy your 6 servers</li>
-          <li>Win: threat deck empty, no threats on board, at least 1 server standing</li>
+          <li>Defeat every threat before they destroy your 6 servers</li>
+          <li>Win: token deck empty, no threats on the board, at least 1 server standing</li>
           <li>Lose: all 6 servers destroyed</li>
         </ul>
       </div>
@@ -2565,28 +2616,37 @@ function showHowToPlay(tab) {
         <h4>The Board</h4>
         <ul>
           <li>5 concentric rings: Internet (outer), Perimeter, Network, Endpoint, Core (center)</li>
-          <li>6 network segments divided into 3 color-coded pairs: DMZ/Web, Corp/Eng, Fin/Exec</li>
-          <li>6 Firewalls on the Endpoint/Core boundary — one per segment</li>
-          <li>6 Servers in the Core — these are your win condition</li>
+          <li>6 network segments in 3 colour-coded pairs: DMZ/Web, Corp/Eng, Fin/Exec</li>
+          <li>6 Firewalls on the Endpoint/Core boundary, one per segment</li>
+          <li>6 Servers in the Core. Lose them all and the game is over</li>
         </ul>
       </div>
       <div class="htp-section">
         <h4>Each Turn</h4>
         <ul>
-          <li><b>1. Draw</b> — Automatically draw cards to fill your hand</li>
-          <li><b>2. Discard</b> — Click a card to discard it and draw a replacement (red borders = discard mode). Click Skip Discard to keep your hand</li>
-          <li><b>3. Play</b> — Click a card to select it, then click a highlighted threat on the board to attack. Play as many cards as you want, then click End Play Phase</li>
-          <li><b>4. Advance</b> — All threats move 1 ring inward. A threat at Endpoint destroys the firewall in its arc and enters the Core. Next turn it hits the server. Threats in the Core rotate clockwise</li>
-          <li><b>5. Spawn</b> — 2 new threats drawn from the deck and placed in the Internet ring. Event tokens (Zero-Day, DDoS) may also appear</li>
+          <li><b>1. Draw</b> — Draw cards until your hand is full</li>
+          <li><b>2. Discard</b> — You may discard one card and draw a replacement (red borders = discard mode)</li>
+          <li><b>3. Play</b> — Play as many cards as you like, then click End Play Phase</li>
+          <li><b>4. Advance</b> — Every threat moves 1 ring inward. A threat at the Endpoint hits the firewall in its segment; with no firewall it hits the server; with neither it slips into the Core and rotates clockwise, hitting whatever it meets</li>
+          <li><b>5. Spawn</b> — Draw 2 tokens. Threats appear in the Internet ring at a random segment. Event tokens resolve immediately</li>
+        </ul>
+      </div>
+      <div class="htp-section">
+        <h4>Firewalls and Servers</h4>
+        <ul>
+          <li>A firewall or server falls in one hit, and a threat <b>takes 1 damage</b> every time it destroys one</li>
+          <li>A threat that hits a firewall or server stays in the Endpoint ring, so Endpoint cards can still reach it</li>
+          <li>A Hardened firewall absorbs one extra hit before it falls</li>
+          <li>A firewall can only be rebuilt in front of a standing server</li>
         </ul>
       </div>
       <div class="htp-section">
         <h4>Targeting Rules</h4>
         <ul>
           <li>Cards must match the threat's <b>ring</b> (Perimeter/Network/Endpoint) AND <b>segment pair</b></li>
-          <li>Threats in the Internet ring cannot be targeted by any card</li>
-          <li>Threats in the Core can only be hit by Contractor or Incident Commander</li>
-          <li>"Any Segment" cards work in their ring regardless of which arc the threat is in</li>
+          <li>Nothing can target a threat in the Internet ring</li>
+          <li>Threats in the Core count as being in the Endpoint ring for targeting</li>
+          <li>"Any Segment" cards work in their ring regardless of segment</li>
         </ul>
       </div>
     </div>
@@ -2594,51 +2654,47 @@ function showHowToPlay(tab) {
     <!-- CARDS TAB -->
     <div class="${panelCls("cards")}">
       <div class="htp-section">
-        <h4>Defense Cards (Ring + Segment)</h4>
+        <h4>Defense Cards (Ring + Segment) — 27</h4>
         <ul>
-          <li><b>Perimeter Def</b> — 1 damage to a threat in the Perimeter ring, matching segment pair. 9 in deck (3 per pair)</li>
-          <li><b>Network Def</b> — 1 damage to a threat in the Network ring, matching segment pair. 9 in deck</li>
-          <li><b>Endpoint Def</b> — 1 damage to a threat in the Endpoint ring, matching segment pair. 9 in deck</li>
+          <li><b>Perimeter Def</b> — 1 damage, Perimeter ring, matching segment pair. 3 per pair</li>
+          <li><b>Network Def</b> — 1 damage, Network ring, matching segment pair. 3 per pair</li>
+          <li><b>Endpoint Def</b> — 1 damage, Endpoint ring or Core, matching segment pair. 3 per pair</li>
         </ul>
       </div>
       <div class="htp-section">
-        <h4>Wildcard Defense (Ring, Any Segment)</h4>
+        <h4>Any-Segment Defense — 3</h4>
         <ul>
-          <li><b>Firewall Rule</b> — 1 damage, Perimeter ring, any segment. 3 in deck</li>
-          <li><b>Network ACL</b> — 1 damage, Network ring, any segment. 3 in deck</li>
-          <li><b>Host Patch</b> — 1 damage, Endpoint ring, any segment. 3 in deck</li>
+          <li><b>Firewall Rule</b> — 1 damage, Perimeter ring, any segment</li>
+          <li><b>Network ACL</b> — 1 damage, Network ring, any segment</li>
+          <li><b>Host Patch</b> — 1 damage, Endpoint ring or Core, any segment</li>
         </ul>
       </div>
       <div class="htp-section">
         <h4>Flexible Targeting</h4>
         <ul>
-          <li><b>Incident Commander</b> — 1 damage, any single ring, any segment. 2 in deck</li>
-          <li><b>Contractor</b> — 1 damage, any threat anywhere on the board (including Core). 2 in deck</li>
-          <li><b>Escalation</b> — 2 damage to a threat in any targetable ring. 2 in deck</li>
-          <li><b>Threat Intel</b> — 1 damage; if you slay the threat, draw 1 extra card. 2 in deck</li>
+          <li><b>Incident Commander</b> — 1 damage, any ring, matching segment pair. 1 per pair</li>
+          <li><b>Contractor</b> — Eliminate 1 threat anywhere on the board. 1 in deck</li>
+          <li><b>Sinkhole</b> — Eliminate 1 threat in the Perimeter, Network or Endpoint ring. 1 in deck</li>
         </ul>
       </div>
       <div class="htp-section">
         <h4>Utility Cards</h4>
         <ul>
-          <li><b>Honeypot</b> — Prevent 1 threat from advancing this turn. 3 in deck</li>
-          <li><b>Harden</b> — Rebuild 1 destroyed firewall (click to choose which). 3 in deck</li>
-          <li><b>Quarantine</b> — Push 1 threat back 1 ring toward the Internet. 2 in deck</li>
-        </ul>
-      </div>
-      <div class="htp-section">
-        <h4>Dead Cards</h4>
-        <ul>
-          <li><b>Misconfigured</b> — Does nothing. Discard it as soon as possible. Count varies by difficulty</li>
+          <li><b>Honeypot</b> — 1 threat does not move during the next Advance. 1 in deck</li>
+          <li><b>Quarantine</b> — Send 1 threat back to the Internet ring. 1 in deck</li>
+          <li><b>Harden</b> — Reinforce a standing firewall so it takes 2 hits. 1 in deck</li>
+          <li><b>Hardware</b> + <b>Config</b> — Play both together to rebuild a destroyed firewall in front of a standing server. 4 of each</li>
+          <li><b>Threat Intel</b> — Draw 2 cards. 2 in deck</li>
+          <li><b>Forensics</b> — Take any 1 card from the discard pile. 1 in deck</li>
         </ul>
       </div>
       <div class="htp-section">
         <h4>Segment Pairs</h4>
         <ul>
-          <li>Segment-specific cards cover 2 arcs each, matching the board colors:</li>
-          <li><b>DMZ / Web Services</b> — teal/cyan arcs</li>
-          <li><b>Corporate / Engineering</b> — blue arcs</li>
-          <li><b>Finance / Executive</b> — amber/orange arcs</li>
+          <li>Segment-specific cards cover 2 segments each, matching the board colours:</li>
+          <li><b>DMZ / Web Services</b> — teal/cyan</li>
+          <li><b>Corporate / Engineering</b> — blue</li>
+          <li><b>Finance / Executive</b> — amber/orange</li>
         </ul>
       </div>
     </div>
@@ -2646,44 +2702,65 @@ function showHowToPlay(tab) {
     <!-- THREATS TAB -->
     <div class="${panelCls("threats")}">
       <div class="htp-section">
-        <h4>Standard Threats</h4>
-        <div class="legend-row"><span class="legend-dot" style="background:#33ff33"></span> <b>Script Kiddie</b> (1 HP) — Basic automated attack. Weak but numerous</div>
-        <div class="legend-row"><span class="legend-dot" style="background:#ff6633"></span> <b>Malware</b> (2 HP) — Standard threat. Takes 2 hits to destroy</div>
-        <div class="legend-row"><span class="legend-dot" style="background:#ff3333"></span> <b>APT</b> (3 HP) — Advanced persistent threat. Tough to bring down</div>
+        <h4>Standard Threats — 34</h4>
+        <div class="legend-row"><span class="legend-dot" style="background:#33ff33"></span> <b>Script Kiddie</b> (1 HP) — Weak but numerous. 12 in deck</div>
+        <div class="legend-row"><span class="legend-dot" style="background:#ff6633"></span> <b>Malware</b> (2 HP) — Takes 2 hits. 12 in deck</div>
+        <div class="legend-row"><span class="legend-dot" style="background:#ff3333"></span> <b>APT</b> (3 HP) — Takes 3 hits. 10 in deck</div>
       </div>
       <div class="htp-section">
-        <h4>Boss Threats</h4>
-        <div class="legend-row"><span class="legend-dot" style="background:#ff00ff"></span> <b>Botnet Commander</b> (3 HP) — On spawn, creates 2 Script Kiddies in the same arc</div>
-        <div class="legend-row"><span class="legend-dot" style="background:#ff0066"></span> <b>Ransomware</b> (3 HP) — On spawn, destroys 1 random firewall</div>
-        <div class="legend-row"><span class="legend-dot" style="background:#cc0000"></span> <b>Nation State Actor</b> (4 HP) — Immune to Perimeter cards. Must be hit in Network/Endpoint or with special cards</div>
-        <div class="legend-row"><span class="legend-dot" style="background:#ff9900"></span> <b>Supply Chain</b> (2 HP) — On spawn, heals all threats in the same arc by 1 HP</div>
+        <h4>Boss Threats — 3</h4>
+        <div class="legend-row"><span class="legend-dot" style="background:#ff00ff"></span> <b>Botnet Commander</b> (3 HP) — On arrival, draw 3 more tokens</div>
+        <div class="legend-row"><span class="legend-dot" style="background:#ff0066"></span> <b>Ransomware</b> (3 HP) — On arrival, draw 4 more tokens</div>
+        <div class="legend-row"><span class="legend-dot" style="background:#ff9900"></span> <b>Supply Chain</b> (3 HP) — On arrival, every threat on the board heals 1 HP</div>
       </div>
       <div class="htp-section">
-        <h4>Event Tokens</h4>
+        <h4>Event Tokens — 12</h4>
         <ul>
-          <li><b>Zero-Day Exploit</b> — All threats in Perimeter and Network rings advance 1 extra ring (red screen pulse)</li>
-          <li><b>DDoS Attack</b> — Destroys 1 random firewall and the server behind it</li>
-          <li><b>Coordinated Attack</b> — Draw 3 extra threat tokens this turn</li>
-          <li><b>Mass Campaign</b> — Draw 4 extra threat tokens this turn</li>
+          <li><b>Outage: Perimeter / Network / Endpoint</b> — Discard every card of that ring from your hand. 1 each</li>
+          <li><b>DDoS Attack</b> — A random segment is flooded: every threat in it is wiped out, then its firewall (or server, if no firewall) is destroyed. 2 in deck</li>
+          <li><b>Coordinated Attack</b> — Draw 3 more tokens. 2 in deck</li>
+          <li><b>Mass Campaign</b> — Draw 4 more tokens. 1 in deck</li>
+          <li><b>Lateral Movement</b> — Every threat shifts one segment clockwise or counter-clockwise. 2 each</li>
         </ul>
       </div>
       <div class="htp-section">
         <h4>Threat Behavior</h4>
         <ul>
           <li>Threats spawn in the Internet ring and advance 1 ring inward each turn</li>
-          <li>Threats cannot be targeted while in the Internet ring — they must reach the Perimeter first</li>
-          <li>When a threat advances past Endpoint, it destroys the firewall in its arc and enters the Core</li>
-          <li>If no firewall remains, the threat destroys the server instead</li>
-          <li>Threats in the Core rotate clockwise, destroying firewalls and servers as they go</li>
-          <li>With Active Defense enabled, a threat takes bonus damage when it destroys a firewall</li>
+          <li>Threats cannot be targeted while in the Internet ring</li>
+          <li>At the Endpoint, a threat destroys the firewall in its segment, then the server, taking 1 damage each time</li>
+          <li>With no firewall or server left in its segment, a threat slips into the Core and rotates clockwise each turn, hitting whatever stands in the next segment</li>
         </ul>
       </div>
       <div class="htp-section">
         <h4>Visual Legend</h4>
-        <div class="legend-row"><span class="legend-dot" style="background:#00ff41"></span> Firewall (intact)</div>
+        <div class="legend-row"><span class="legend-dot" style="background:#00ff41"></span> Firewall (standing)</div>
         <div class="legend-row"><span style="color:#ff3333;font-size:14px;">XX</span> Firewall (destroyed)</div>
-        <div class="legend-row"><span class="legend-dot" style="background:#ffb000"></span> Server (intact)</div>
+        <div class="legend-row"><span class="legend-dot" style="background:#ffb000"></span> Server (standing)</div>
         <div class="legend-row"><span style="color:#ff3333;font-size:14px;">XX</span> Server (destroyed)</div>
+        <div class="legend-row"><span style="color:#ffb000;font-size:14px;">⚑</span> Honeypot on a threat</div>
+      </div>
+    </div>
+
+    <!-- ADD-ONS TAB -->
+    <div class="${panelCls("addons")}">
+      <div class="htp-section">
+        <h4>House Rules</h4>
+        <ul>
+          <li>The <b>Standard</b> preset is the full base game. Every add-on below is off unless you turn it on in the main menu</li>
+          <li><b>Hand Size</b> — 6 is the base rule for a solo player. Fewer cards is harder</li>
+          <li><b>Boss Threats / Event Tokens</b> — Turn either off for an easier game</li>
+        </ul>
+      </div>
+      <div class="htp-section">
+        <h4>Add-ons</h4>
+        <ul>
+          <li><b>Active Defense</b> — Threats take 1 extra (or 2 extra) damage when they hit a firewall or server, on top of the base 1</li>
+          <li><b>Escalation Cards</b> — 2 extra cards that deal 2 damage in the Perimeter, Network or Endpoint ring</li>
+          <li><b>Nation State</b> — An extra 4 HP boss that is immune to Perimeter-ring cards</li>
+          <li><b>Zero-Day Exploits</b> — 2 extra event tokens: every threat in the Perimeter and Network rings surges 1 ring inward</li>
+          <li><b>Misconfigurations</b> — Dead cards shuffled into the deck. They do nothing; discard them during the Discard phase</li>
+        </ul>
       </div>
     </div>
 
@@ -2692,7 +2769,7 @@ function showHowToPlay(tab) {
       <div class="htp-section">
         <h4>Keyboard Shortcuts</h4>
         <ul>
-          <li><b>1-5</b> — Select card from hand by position</li>
+          <li><b>1-9</b> — Select a card by its number</li>
           <li><b>Enter / Space</b> — Skip discard or end play phase</li>
           <li><b>Escape</b> — Deselect card or close dialogs</li>
           <li><b>H</b> — Toggle this help screen</li>
@@ -2702,14 +2779,13 @@ function showHowToPlay(tab) {
       <div class="htp-section">
         <h4>Strategy Tips</h4>
         <ul>
-          <li>Don't waste powerful cards on 1-HP Script Kiddies if a basic card will do</li>
-          <li>Save Honeypots for bosses or threats about to breach your firewalls</li>
-          <li>Harden cards are rare — choose which firewall to rebuild carefully</li>
-          <li>Discard Misconfigured cards immediately — they're dead weight</li>
-          <li>Quarantine pushes threats back outward — buy yourself time</li>
-          <li>Watch the Threats Left counter — when it hits 0, you just need to survive what's on the board</li>
-          <li>Threats in the Core can only be hit by Contractor or Incident Commander — save these</li>
-          <li>Active Defense (house rule) deals bonus damage to threats when they destroy a firewall — can finish off weakened threats</li>
+          <li>Don't waste flexible cards on 1 HP Script Kiddies if a basic card will do</li>
+          <li>A threat at the Endpoint takes damage for every firewall or server it breaks. Sometimes letting a firewall fall finishes it off</li>
+          <li>Save the Honeypot for a boss or a threat about to hit a server</li>
+          <li>Hold Hardware and Config together. Neither does anything alone</li>
+          <li>Quarantine buys three turns: the threat has to walk back in from the Internet</li>
+          <li>Forensics can fetch back a card you had to discard to an Outage</li>
+          <li>Watch the Tokens Left counter. When it hits 0, you just need to clear the board</li>
         </ul>
       </div>
     </div>
@@ -2725,7 +2801,7 @@ function showHowToPlay(tab) {
     </div>
 
     <div class="modal-actions">
-      <button class="action-btn" onclick="closeModal();">Close</button>
+      <button class="action-btn" onclick="${closeAction}">${G ? "Close" : "Back"}</button>
     </div>
   `;
   openModal();
@@ -2733,12 +2809,14 @@ function showHowToPlay(tab) {
 
 function showGameOver(won) {
   if (won) sfxWin(); else sfxLose();
-  const modal = document.getElementById("modal-overlay");
   const content = document.getElementById("modal-content");
   content.dataset.dismissable = "false";
+  content.dataset.help = "false";
   const serversLeft = G.servers.filter(Boolean).length;
-  const score = G.slain * 10 + serversLeft * 50 + (won ? 200 : 0) - G.turn * 2;
-  const grade = won ? (score >= 500 ? "S" : score >= 400 ? "A" : score >= 300 ? "B" : "C") : "F";
+  const fwLeft = G.firewalls.filter(f => f > 0).length;
+  const score = G.slain * 10 + serversLeft * 50 + fwLeft * 20 + (won ? 200 : 0) - G.turn * 2;
+  let grade = "F";
+  if (won) grade = serversLeft === 6 ? "S" : serversLeft >= 5 ? "A" : serversLeft >= 3 ? "B" : "C";
   content.innerHTML = `
     <h2>${won ? "NETWORK SECURED" : "NETWORK COMPROMISED"}</h2>
     <p style="text-align:center;font-size:14px;color:${won ? 'var(--crt-green)' : 'var(--crt-red)'};">
@@ -2746,8 +2824,8 @@ function showGameOver(won) {
     </p>
     <p>Threats slain: ${G.slain}</p>
     <p>Servers remaining: ${serversLeft}/6</p>
+    <p>Firewalls remaining: ${fwLeft}/6</p>
     <p>Turns taken: ${G.turn}</p>
-    <p>Firewalls remaining: ${G.firewalls.filter(f => f > 0).length}/6</p>
     <p style="font-size:18px;color:var(--crt-amber);text-align:center;margin-top:12px;">
       Score: ${Math.max(0, score)} — Grade: ${grade}
     </p>
@@ -2760,46 +2838,51 @@ function showGameOver(won) {
 }
 
 let _prevFocus = null;
+let _trapHandler = null;
 function closeModal() {
   document.getElementById("modal-overlay").classList.remove("active");
+  if (_trapHandler) {
+    document.getElementById("modal-content").removeEventListener("keydown", _trapHandler);
+    _trapHandler = null;
+  }
   if (_prevFocus) { _prevFocus.focus(); _prevFocus = null; }
 }
 
 function openModal() {
-  _prevFocus = document.activeElement;
+  if (!modalOpen()) _prevFocus = document.activeElement;
   document.getElementById("modal-overlay").classList.add("active");
   setTimeout(trapFocusInModal, 50);
 }
 
 function trapFocusInModal() {
   const modal = document.getElementById("modal-content");
-  if (!modal) return;
+  if (!modal || !modalOpen()) return;
+  if (_trapHandler) modal.removeEventListener("keydown", _trapHandler);
   const focusable = modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
   if (focusable.length === 0) return;
   const first = focusable[0];
   const last = focusable[focusable.length - 1];
   first.focus();
 
-  modal.addEventListener("keydown", function handler(e) {
+  _trapHandler = function (e) {
     if (e.key !== "Tab") return;
     if (e.shiftKey) {
       if (document.activeElement === first) { e.preventDefault(); last.focus(); }
     } else {
       if (document.activeElement === last) { e.preventDefault(); first.focus(); }
     }
-    if (!document.getElementById("modal-overlay").classList.contains("active")) {
-      modal.removeEventListener("keydown", handler);
-    }
-  });
+  };
+  modal.addEventListener("keydown", _trapHandler);
 }
 
 // Click outside modal content to close (only for help/non-essential modals)
 document.getElementById("modal-overlay").addEventListener("click", (e) => {
   if (e.target === document.getElementById("modal-overlay")) {
-    // Don't close if it's the main menu or game over (those require action)
     const content = document.getElementById("modal-content");
     if (content && content.dataset.dismissable === "true") {
       closeModal();
+      deselect();
+      if (G) updateAll();
     }
   }
 });
@@ -2847,25 +2930,25 @@ function applyPreset(presetId) {
 const TUTORIAL_STEPS = [
   { title: "Welcome, Architect", text: "Cyber threats are advancing through your network toward your servers at the core.\n\nYour job: play security cards to stop them before they reach the center." },
   { title: "The Board", text: "The board has 5 rings. Threats spawn in the Internet ring (outer) and advance inward each turn through Perimeter, Network, and Endpoint toward your Core.\n\n6 network segments divide the board into arcs (DMZ, Web, Corporate, Engineering, Finance, Executive)." },
-  { title: "Your Cards", text: "Each turn you draw up to 5 cards. Cards like 'Perimeter Def [DMZ/Web]' can only hit threats in the Perimeter ring AND in the DMZ or Web Services arcs.\n\nSpecial cards like Contractor or Incident Commander can hit threats anywhere." },
-  { title: "Playing Cards", text: "During the Play phase:\n1. Click a card in your hand to select it\n2. Valid targets glow on the board\n3. Click a threat to attack it\n\nYou can play as many cards as you want, then click 'End Play Phase'." },
-  { title: "Firewalls & Servers", text: "6 Firewalls guard the Core boundary. When a threat advances past Endpoint, it destroys the firewall and enters the Core. On the next turn, it will hit the server.\n\nWith Active Defense enabled, the firewall deals damage back to the attacker as it falls.\n\nUse Harden cards to rebuild destroyed firewalls!" },
-  { title: "Boss Threats", text: "Boss threats have special abilities:\n- Botnet Commander spawns extra Script Kiddies\n- Ransomware destroys a firewall on arrival\n- Nation State is immune to Perimeter cards\n- Supply Chain heals nearby threats" },
-  { title: "Good Luck!", text: "Defeat all threats in the deck with at least 1 server standing to win.\n\nPress H anytime for the full How to Play guide. Press Escape to close dialogs." },
+  { title: "Your Cards", text: "Each turn you draw up to a full hand. A card like 'Perimeter Def [DMZ/Web]' can only hit a threat in the Perimeter ring AND in the DMZ or Web Services segment.\n\nCards like Contractor or Incident Commander are more flexible. Hardware and Config only work when played together." },
+  { title: "Playing Cards", text: "During the Play phase:\n1. Click a card in your hand to select it\n2. Valid targets glow on the board\n3. Click a threat (or a firewall slot) to play the card\n\nYou can play as many cards as you want, then click 'End Play Phase'." },
+  { title: "Firewalls & Servers", text: "6 Firewalls guard the Core. A threat at the Endpoint destroys the firewall in its segment, then the server behind it, taking 1 damage each time.\n\nOnly when nothing is left in its segment does a threat slip into the Core and start circling.\n\nPlay Hardware + Config to rebuild a firewall, and Harden to make one take 2 hits." },
+  { title: "Tokens", text: "Each turn 2 tokens are drawn. Most are threats. Some are events:\n- Outage discards a whole ring of cards from your hand\n- DDoS wipes a segment and its firewall\n- Lateral Movement shifts every threat sideways\n- Bosses draw extra tokens or heal the board" },
+  { title: "Good Luck!", text: "Clear the token deck and the board with at least 1 server standing to win.\n\nPress H anytime for the full How to Play guide. Press Escape to close dialogs." },
 ];
 
 let tutorialStep = 0;
 function showTutorial() {
-  if (localStorage.getItem("pumapanic_tutorialSeen2")) return;
-  localStorage.setItem("pumapanic_tutorialSeen2", "1");
+  if (localStorage.getItem("pumapanic_tutorialSeen3")) return;
+  localStorage.setItem("pumapanic_tutorialSeen3", "1");
   tutorialStep = 0;
   showTutorialStep();
 }
 function showTutorialStep() {
-  document.getElementById("modal-content").dataset.dismissable = "false";
-  const step = TUTORIAL_STEPS[tutorialStep];
-  const modal = document.getElementById("modal-overlay");
   const content = document.getElementById("modal-content");
+  content.dataset.dismissable = "false";
+  content.dataset.help = "false";
+  const step = TUTORIAL_STEPS[tutorialStep];
   content.innerHTML = `
     <h2 style="font-size:14px;">${step.title}</h2>
     <p>${step.text.replace(/\n/g, "<br>")}</p>
