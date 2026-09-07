@@ -125,6 +125,36 @@ html, body {
   100% { opacity: 0; }
 }
 
+/* Phase banner — brief centered callout over the board on every phase change */
+#phase-toast {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  padding: 10px 26px;
+  border: 1px solid var(--crt-green-dim);
+  border-radius: 4px;
+  background: rgba(5, 12, 5, 0.92);
+  color: var(--crt-green);
+  font-size: 18px;
+  font-weight: bold;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px var(--crt-green-dark);
+  box-shadow: 0 0 24px rgba(0,255,65,0.25);
+  white-space: nowrap;
+}
+#phase-toast.danger { border-color: var(--crt-red); color: var(--crt-red); text-shadow: 0 0 10px rgba(255,51,51,0.6); box-shadow: 0 0 24px rgba(255,51,51,0.25); }
+#phase-toast.active { animation: phase-toast-pop 0.7s var(--ease-out-quart) forwards; }
+@keyframes phase-toast-pop {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
+  15%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  70%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.04); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -132,6 +162,7 @@ html, body {
     transition-duration: 0.01ms !important;
   }
   #canvas-wrap::after, #screen-pulse { display: none; }
+  #phase-toast.active { animation: none; opacity: 1; }
 }
 
 /* Sidebar — takes all remaining width after canvas */
@@ -400,6 +431,7 @@ html, body {
   <div id="canvas-wrap">
     <canvas id="game-canvas" width="800" height="800" role="img" aria-label="Network defense board"></canvas>
     <div id="screen-pulse"></div>
+    <div id="phase-toast" aria-hidden="true"></div>
   </div>
 
   <div id="sidebar">
@@ -2469,8 +2501,23 @@ function updatePhaseUI() {
     display.classList.add("phase-change");
     if (G.phase === "advance" || G.phase === "spawn") display.classList.add("phase-danger");
     sfxPhaseChange();
+    if (name && G.phase !== "gameover") showPhaseToast(name, G.phase === "advance" || G.phase === "spawn");
     prevPhase = G.phase;
   }
+}
+
+// Brief centered banner over the board naming the phase just entered.
+let _phaseToastTimer = null;
+function showPhaseToast(text, danger) {
+  const el = document.getElementById("phase-toast");
+  if (!el) return;
+  if (_phaseToastTimer) clearTimeout(_phaseToastTimer);
+  el.textContent = text;
+  el.classList.remove("active", "danger");
+  if (danger) el.classList.add("danger");
+  void el.offsetWidth; // restart the animation
+  el.classList.add("active");
+  _phaseToastTimer = setTimeout(() => { el.classList.remove("active"); _phaseToastTimer = null; }, 700);
 }
 
 function getCardName(card) {
