@@ -2502,7 +2502,8 @@ function updatePhaseUI() {
     display.classList.add("phase-change");
     if (G.phase === "advance" || G.phase === "spawn") display.classList.add("phase-danger");
     sfxPhaseChange();
-    if (name && G.phase !== "gameover") showPhaseToast(name, G.phase === "advance" || G.phase === "spawn");
+    // No banner for the token draw: it is over in a moment and needs nothing from the player
+    if (name && G.phase !== "gameover" && G.phase !== "spawn") showPhaseToast(name, G.phase === "advance");
     prevPhase = G.phase;
   }
 }
