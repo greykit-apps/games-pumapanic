@@ -6,7 +6,7 @@ Inspired by [Castle Panic](https://firesidegames.com/products/castle-panic-secon
 
 ## Play
 
-[pumapanic.greykit.com](https://pumapanic.greykit.com)
+[greykit.com/games/pumapanic](https://greykit.com/games/pumapanic/)
 
 No install required. Single HTML file, runs in any modern browser.
 

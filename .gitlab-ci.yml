@@ -47,5 +47,5 @@ deploy:
         done
       }
   script:
-    - puma_rsync -avz --delete --exclude='.git' --exclude='.claude' --exclude='.gitlab-ci.yml' ./ ${DREAMHOST_USERNAME}@${DREAMHOST_HOST}:/home/${DREAMHOST_USERNAME}/pumapanic.greykit.com/
+    # Single destination, so this job costs exactly one SSH connection.
     - puma_rsync -avz --delete --exclude='.git' --exclude='.claude' --exclude='.gitlab-ci.yml' ./ ${DREAMHOST_USERNAME}@${DREAMHOST_HOST}:/home/${DREAMHOST_USERNAME}/greykit.com/games/pumapanic/
