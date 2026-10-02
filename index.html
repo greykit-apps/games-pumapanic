@@ -104,7 +104,10 @@ html, body {
   height: 100%;
   max-width: 100%;
 }
-#game-canvas { display: block; width: 100%; height: 100%; }
+/* contain, not the default fill: when the wrap can't stay square (a tall,
+   narrow window) the board letterboxes instead of stretching, which is
+   also what getCanvasCoords assumes when it maps a click. */
+#game-canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
 /* Screen pulse overlay */
 #screen-pulse {
   position: absolute;
