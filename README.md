@@ -34,7 +34,7 @@ You win when the token deck is empty, the board is clear, and at least one serve
 - **Add-ons in the difficulty system** — Everything not in the base game is an opt-in house rule: Active Defense, Escalation cards, the Nation State boss, Zero-Day event tokens, Misconfigured dead cards
 - **3 presets** — Beginner, Standard (the full base game), Hard
 - **Animated events** — Smooth threat movement, FLIP card animations, screen pulse on critical events, colour-coded SIEM feed
-- **Retro CRT aesthetic** — Scanlines, vignette, phosphor glow, monospace terminal look
+- **Tactical look** — the cyan-on-navy palette PumaRally, PumaTycoon and PumaTriage share, monospace terminal type
 - **Sound effects** — Web Audio API procedurally generated retro sounds (mutable)
 - **Tutorial** — 7-step guided introduction on first play
 - **Accessible** — Keyboard shortcuts, screen reader announcements, prefers-reduced-motion support, stacked layout on phones

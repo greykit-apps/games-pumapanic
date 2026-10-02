@@ -8,20 +8,22 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --crt-green: #00ff41;
-  --crt-green-dim: #00cc33;
-  --crt-green-dark: #009926;
-  --crt-amber: #ffb000;
-  --crt-amber-dim: #cc8800;
-  --crt-red: #ff3333;
-  --crt-blue: #6699ff;
-  --crt-purple: #cc66ff;
-  --crt-cyan: #00cccc;
-  --crt-bg: #0a0a0a;
-  --crt-panel: #111;
-  --crt-border: #1a3a1a;
-  --crt-text: #00ff41;
-  --crt-text-dim: #00aa2a;
+  /* Tactical tribe: the cyan palette PumaRally, PumaTycoon and PumaTriage
+     share (values copied from pumarally/editor/render/palette.js). Cyan is
+     the one thing waiting on you; amber is kept for a warning. */
+  --accent: #54f2ff;
+  --accent-dim: #2b7f92;
+  --warn: #ffb000;
+  --red: #ff3333;
+  --green: #4ade6a;
+  --white: #dbe4fb;
+  --bg: #05070f;
+  --panel: #0a0e1a;
+  --border: #1b2540;
+  --lit: #47609c;
+  --line: #141d33;
+  --text: #9aa5c6;
+  --text-dim: #7d8aa8;
   --font-mono: "Courier New", "Lucida Console", monospace;
   /* Animation curves */
   --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
@@ -30,8 +32,8 @@
 
 html, body {
   height: 100%;
-  background: #000;
-  color: var(--crt-text);
+  background: var(--bg);
+  color: var(--text);
   font-family: var(--font-mono);
   font-size: 13px;
   overflow: hidden;
@@ -44,7 +46,7 @@ html, body {
   grid-template-columns: auto 1fr;
   grid-template-areas: "hud-top hud-top" "canvas sidebar";
   height: 100vh;
-  background: var(--crt-bg);
+  background: var(--bg);
 }
 
 /* Top HUD */
@@ -54,39 +56,39 @@ html, body {
   align-items: center;
   justify-content: space-between;
   padding: 4px 16px;
-  background: var(--crt-panel);
-  border-bottom: 1px solid var(--crt-border);
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
   font-size: 13px;
   min-height: 32px;
 }
-#hud-top .title { color: var(--crt-amber); font-weight: bold; text-shadow: 0 0 8px var(--crt-amber-dim); letter-spacing: 1px; }
+#hud-top .title { color: var(--accent); font-weight: bold; text-shadow: 0 0 8px rgba(84,242,255,0.6); letter-spacing: 1px; }
 .stats { display: flex; gap: 20px; }
 .stat { display: flex; gap: 5px; }
-.stat-label { color: var(--crt-text-dim); font-size: 11px; }
-.stat-value { color: var(--crt-green); text-shadow: 0 0 4px var(--crt-green-dark); transition: color 0.3s var(--ease-out-quart), text-shadow 0.3s; }
-.stat-value.flash { color: var(--crt-amber); text-shadow: 0 0 12px var(--crt-amber); }
-.stat-value.flash-red { color: var(--crt-red); text-shadow: 0 0 12px var(--crt-red); }
+.stat-label { color: var(--text-dim); font-size: 11px; }
+.stat-value { color: var(--white); transition: color 0.3s var(--ease-out-quart), text-shadow 0.3s; }
+.stat-value.flash { color: var(--warn); text-shadow: 0 0 12px var(--warn); }
+.stat-value.flash-red { color: var(--red); text-shadow: 0 0 12px var(--red); }
 .hud-buttons { display: flex; gap: 4px; align-items: center; }
 .hud-buttons button {
   height: 24px; cursor: pointer; border-radius: 3px;
-  border: 1px solid var(--crt-border); background: none;
+  border: 1px solid var(--border); background: none;
   font-family: var(--font-mono); font-size: 10px;
   transition: border-color 0.2s, background 0.2s, color 0.2s;
 }
-.hud-buttons button:hover { border-color: var(--crt-green-dim); background: rgba(0,255,65,0.05); }
-#btn-help { width: 24px; color: var(--crt-amber); font-size: 13px; font-weight: bold; }
-#btn-help:hover { border-color: var(--crt-amber); background: rgba(255,176,0,0.1); }
+.hud-buttons button:hover { border-color: var(--lit); background: rgba(219,228,251,0.08); }
+#btn-help { width: 24px; color: var(--accent); font-size: 13px; font-weight: bold; }
+#btn-help:hover { border-color: var(--accent); background: rgba(84,242,255,0.1); }
 #mute-btn {
   font-size: 0; width: 28px;
-  background: no-repeat center/14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 5L6 9H2v6h4l5 4V5z'/%3E%3Cline x1='23' y1='9' x2='17' y2='15'/%3E%3Cline x1='17' y1='9' x2='23' y2='15'/%3E%3C/svg%3E");
+  background: no-repeat center/14px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237d8aa8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 5L6 9H2v6h4l5 4V5z'/%3E%3Cline x1='23' y1='9' x2='17' y2='15'/%3E%3Cline x1='17' y1='9' x2='23' y2='15'/%3E%3C/svg%3E");
 }
 #mute-btn[aria-pressed="true"] {
-  border-color: var(--crt-green-dim);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300ff41' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 5L6 9H2v6h4l5 4V5z'/%3E%3Cpath d='M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07'/%3E%3C/svg%3E");
+  border-color: var(--lit);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23dbe4fb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11 5L6 9H2v6h4l5 4V5z'/%3E%3Cpath d='M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07'/%3E%3C/svg%3E");
 }
-#newgame-btn { color: var(--crt-text-dim); padding: 0 8px; text-transform: uppercase; letter-spacing: 1px; }
-#newgame-btn:hover { color: var(--crt-green); }
-#newgame-btn.confirm { color: var(--crt-red) !important; border-color: var(--crt-red) !important; }
+#newgame-btn { color: var(--text-dim); padding: 0 8px; text-transform: uppercase; letter-spacing: 1px; }
+#newgame-btn:hover { color: var(--white); }
+#newgame-btn.confirm { color: var(--red) !important; border-color: var(--red) !important; }
 
 /* Canvas — square aspect ratio, height-driven */
 #canvas-wrap {
@@ -96,15 +98,16 @@ html, body {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  background: var(--crt-bg);
+  background: var(--bg);
   min-height: 0;
   aspect-ratio: 1;
   height: 100%;
   max-width: 100%;
 }
-#game-canvas { display: block; width: 100%; height: 100%; }
-#canvas-wrap::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px); pointer-events: none; z-index: 2; }
-#canvas-wrap::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.5) 100%); pointer-events: none; z-index: 3; }
+/* contain, not the default fill: when the wrap can't stay square (a tall,
+   narrow window) the board letterboxes instead of stretching, which is
+   also what getCanvasCoords assumes when it maps a click. */
+#game-canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
 /* Screen pulse overlay */
 #screen-pulse {
   position: absolute;
@@ -134,20 +137,20 @@ html, body {
   pointer-events: none;
   opacity: 0;
   padding: 22px 0;
-  border-top: 3px solid var(--crt-green);
-  border-bottom: 3px solid var(--crt-green);
-  background: linear-gradient(90deg, rgba(0,20,5,0) 0%, rgba(0,20,5,0.96) 12%, rgba(0,20,5,0.96) 88%, rgba(0,20,5,0) 100%);
-  color: var(--crt-green);
+  border-top: 3px solid var(--accent);
+  border-bottom: 3px solid var(--accent);
+  background: linear-gradient(90deg, rgba(5,9,20,0) 0%, rgba(5,9,20,0.96) 12%, rgba(5,9,20,0.96) 88%, rgba(5,9,20,0) 100%);
+  color: var(--accent);
   font-size: clamp(22px, 5.5vmin, 44px);
   font-weight: bold;
   letter-spacing: 6px;
   text-align: center;
   text-transform: uppercase;
-  text-shadow: 0 0 14px var(--crt-green), 0 0 36px var(--crt-green-dark);
-  box-shadow: 0 0 40px rgba(0,255,65,0.35), inset 0 0 30px rgba(0,255,65,0.08);
+  text-shadow: 0 0 14px var(--accent), 0 0 36px var(--accent-dim);
+  box-shadow: 0 0 40px rgba(84,242,255,0.35), inset 0 0 30px rgba(84,242,255,0.08);
   white-space: nowrap;
 }
-#phase-toast.danger { border-color: var(--crt-red); color: var(--crt-red); text-shadow: 0 0 14px var(--crt-red), 0 0 36px rgba(255,51,51,0.6); box-shadow: 0 0 40px rgba(255,51,51,0.4), inset 0 0 30px rgba(255,51,51,0.1); }
+#phase-toast.danger { border-color: var(--red); color: var(--red); text-shadow: 0 0 14px var(--red), 0 0 36px rgba(255,51,51,0.6); box-shadow: 0 0 40px rgba(255,51,51,0.4), inset 0 0 30px rgba(255,51,51,0.1); }
 #phase-toast.active { animation: phase-toast-pop 0.9s var(--ease-out-quart) forwards; }
 @keyframes phase-toast-pop {
   0%   { opacity: 0; transform: translateY(-50%) scaleY(0.4); }
@@ -162,7 +165,7 @@ html, body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  #canvas-wrap::after, #screen-pulse { display: none; }
+  #screen-pulse { display: none; }
   #phase-toast.active { animation: none; opacity: 1; }
 }
 
@@ -171,31 +174,31 @@ html, body {
   grid-area: sidebar;
   display: flex;
   flex-direction: column;
-  background: var(--crt-panel);
-  border-left: 1px solid var(--crt-border);
+  background: var(--panel);
+  border-left: 1px solid var(--border);
   overflow-y: auto;
   overflow-x: hidden;
   font-size: 13px;
   min-height: 0;
   min-width: 280px;
 }
-.sb-section { padding: 8px 10px; border-bottom: 1px solid var(--crt-border); }
-.sb-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--crt-amber); margin-bottom: 6px; }
+.sb-section { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.sb-section h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 6px; }
 #phase-display {
-  font-size: 14px; color: var(--crt-amber); text-align: center; padding: 10px;
-  background: rgba(255,176,0,0.05); border-bottom: 1px solid var(--crt-border);
+  font-size: 14px; color: var(--accent); text-align: center; padding: 10px;
+  background: rgba(84,242,255,0.05); border-bottom: 1px solid var(--border);
   text-transform: uppercase; letter-spacing: 2px;
   transition: background 0.4s var(--ease-out-quart), color 0.3s;
 }
 #phase-display.phase-change { animation: phase-flash 0.6s var(--ease-out-quart); }
 @keyframes phase-flash {
-  0% { background: rgba(255,176,0,0.25); }
-  100% { background: rgba(255,176,0,0.05); }
+  0% { background: rgba(84,242,255,0.25); }
+  100% { background: rgba(84,242,255,0.05); }
 }
-#phase-display.phase-danger { background: rgba(255,51,51,0.15); color: var(--crt-red); }
+#phase-display.phase-danger { background: rgba(255,51,51,0.15); color: var(--red); }
 #phase-instructions {
-  color: var(--crt-text-dim); font-size: 11px; padding: 6px 10px; line-height: 1.5;
-  border-bottom: 1px solid var(--crt-border); min-height: 48px;
+  color: var(--text-dim); font-size: 11px; padding: 6px 10px; line-height: 1.5;
+  border-bottom: 1px solid var(--border); min-height: 48px;
   transition: opacity 0.3s var(--ease-out-quart);
 }
 /* SIEM feed is in sidebar lower section */
@@ -210,8 +213,8 @@ html, body {
 .card {
   width: 100%;
   padding: 8px 10px;
-  background: rgba(0,255,65,0.03);
-  border: 2px solid var(--crt-border);
+  background: rgba(219,228,251,0.03);
+  border: 2px solid var(--border);
   border-radius: 5px;
   cursor: pointer;
   display: flex;
@@ -223,15 +226,15 @@ html, body {
   position: relative;
   transform: translateX(0);
 }
-.card:hover { border-color: var(--crt-green); background: rgba(0,255,65,0.07); transform: translateX(-2px); }
+.card:hover { border-color: var(--lit); background: rgba(219,228,251,0.07); transform: translateX(-2px); }
 .card:active { transform: scale(0.97); transition-duration: 0.08s; }
-.discard-phase .card { border-left: 4px solid var(--crt-red); border-right: 4px solid var(--crt-red); }
-.discard-phase .card:hover { border-color: var(--crt-red); background: rgba(255,51,51,0.12); transform: translateX(2px); }
-.discard-phase .card:hover .card-name { color: var(--crt-red); transition: color 0.15s; }
-.card.selected { border-color: var(--crt-amber); background: rgba(255,176,0,0.12); box-shadow: 0 0 16px rgba(255,176,0,0.25); transform: translateX(-4px); }
+.discard-phase .card { border-left: 4px solid var(--red); border-right: 4px solid var(--red); }
+.discard-phase .card:hover { border-color: var(--red); background: rgba(255,51,51,0.12); transform: translateX(2px); }
+.discard-phase .card:hover .card-name { color: var(--red); transition: color 0.15s; }
+.card.selected { border-color: var(--accent); background: rgba(84,242,255,0.12); box-shadow: 0 0 16px rgba(84,242,255,0.25); transform: translateX(-4px); }
 .card.disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
-.card.misconfig-discard { border: 2px solid var(--crt-red); background: rgba(255,51,51,0.18); box-shadow: 0 0 12px rgba(255,51,51,0.3); }
-.card.misconfig-discard .card-name { color: var(--crt-red); }
+.card.misconfig-discard { border: 2px solid var(--red); background: rgba(255,51,51,0.18); box-shadow: 0 0 12px rgba(255,51,51,0.3); }
+.card.misconfig-discard .card-name { color: var(--red); }
 .card.misconfig-discard:hover { background: rgba(255,51,51,0.28); box-shadow: 0 0 20px rgba(255,51,51,0.45); transform: translateX(2px); }
 /* Card enter animation */
 .card.card-enter { animation: card-slide-in 0.35s var(--ease-out-expo) both; }
@@ -242,8 +245,8 @@ html, body {
 /* Card exit — played (slides left, green tint) */
 #card-hand .card.card-exit-play {
   animation: card-play-out 0.3s var(--ease-out-quart) forwards;
-  border-color: var(--crt-green);
-  background: rgba(0,255,65,0.15);
+  border-color: var(--green);
+  background: rgba(74,222,106,0.15);
 }
 @keyframes card-play-out {
   to { opacity: 0; transform: translateX(-40px) scale(0.9); max-height: 0; padding: 0 10px; margin: 0; }
@@ -251,14 +254,15 @@ html, body {
 /* Card exit — discarded (slides right, red tint) */
 #card-hand .card.card-exit-discard {
   animation: card-discard-out 0.3s var(--ease-out-quart) forwards;
-  border-color: var(--crt-red);
+  border-color: var(--red);
   background: rgba(255,51,51,0.15);
 }
 @keyframes card-discard-out {
   to { opacity: 0; transform: translateX(40px) scale(0.9); max-height: 0; padding: 0 10px; margin: 0; }
 }
-.card .card-name { font-size: 15px; font-weight: bold; color: var(--crt-amber); line-height: 1.2; }
-.card .card-desc { font-size: 10px; color: var(--crt-text-dim); line-height: 1.3; }
+.card .card-name { font-size: 15px; font-weight: bold; color: var(--white); line-height: 1.2; }
+.card.selected .card-name { color: var(--accent); }
+.card .card-desc { font-size: 10px; color: var(--text-dim); line-height: 1.3; }
 .card .card-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
 .card .card-badge {
   font-size: 11px;
@@ -272,7 +276,7 @@ html, body {
   top: 6px;
   right: 8px;
   font-size: 10px;
-  color: var(--crt-text-dim);
+  color: var(--text-dim);
   opacity: 0.5;
 }
 /* Ring badges — white text on solid dark backgrounds, clearly labeled as RING */
@@ -280,10 +284,10 @@ html, body {
 .badge-network { background: #1a1a33; color: #ffffff; border: 1px solid #333366; }
 .badge-endpoint { background: #2a1a2a; color: #ffffff; border: 1px solid #553355; }
 .badge-any-ring { background: #332200; color: #ffcc44; border: 1px solid #664400; }
-.badge-special { background: #0a1a0a; color: var(--crt-green); border: 1px solid #1a3a1a; }
+.badge-special { background: rgba(74,222,106,0.1); color: var(--green); border: 1px solid rgba(74,222,106,0.35); }
 /* Segment badges — colored to match the board arc colors */
-.badge-segment { background: rgba(255,255,255,0.05); color: var(--crt-text); border: 1px solid rgba(255,255,255,0.1); }
-.badge-dmzweb { background: rgba(0,170,170,0.15); color: #00eecc; border: 2px solid #00aaaa; }
+.badge-segment { background: rgba(255,255,255,0.05); color: var(--text); border: 1px solid rgba(255,255,255,0.1); }
+.badge-dmzweb { background: rgba(148,102,221,0.15); color: #d0b0ff; border: 2px solid #9466dd; }
 .badge-corpeng { background: rgba(85,119,204,0.15); color: #88bbff; border: 2px solid #5577cc; }
 .badge-finexec { background: rgba(204,119,34,0.15); color: #ffcc66; border: 2px solid #cc7722; }
 
@@ -302,25 +306,25 @@ html, body {
 }
 #siem-log li {
   padding: 3px 0;
-  border-bottom: 1px solid rgba(0,255,65,0.04);
-  color: var(--crt-text-dim);
+  border-bottom: 1px solid var(--line);
+  color: var(--text-dim);
   line-height: 1.3;
   animation: log-enter 0.3s var(--ease-out-expo) both;
 }
-#siem-log li:first-child { color: var(--crt-text); }
-#siem-log li.log-danger { color: var(--crt-red); }
-#siem-log li.log-warn { color: var(--crt-amber); }
-#siem-log li.log-good { color: var(--crt-green); }
+#siem-log li:first-child { color: var(--white); }
+#siem-log li.log-danger { color: var(--red); }
+#siem-log li.log-warn { color: var(--warn); }
+#siem-log li.log-good { color: var(--green); }
 @keyframes log-enter {
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .action-btn {
   padding: 6px 14px;
-  background: rgba(0,255,65,0.1);
-  border: 1px solid var(--crt-green-dim);
+  background: transparent;
+  border: 1px solid var(--lit);
   border-radius: 3px;
-  color: var(--crt-green);
+  color: var(--white);
   font-family: var(--font-mono);
   font-size: 12px;
   cursor: pointer;
@@ -328,10 +332,11 @@ html, body {
   letter-spacing: 1px;
   transition: background 0.2s var(--ease-out-quart), border-color 0.2s, transform 0.15s var(--ease-out-quart), box-shadow 0.2s;
 }
-.action-btn:hover { background: rgba(0,255,65,0.2); border-color: var(--crt-green); box-shadow: 0 0 8px rgba(0,255,65,0.15); }
+.action-btn:hover { background: rgba(219,228,251,0.1); border-color: var(--white); }
 .action-btn:active { transform: scale(0.96); transition-duration: 0.06s; }
-.action-btn.amber { border-color: var(--crt-amber-dim); color: var(--crt-amber); background: rgba(255,176,0,0.1); }
-.action-btn.amber:hover { background: rgba(255,176,0,0.2); border-color: var(--crt-amber); box-shadow: 0 0 8px rgba(255,176,0,0.15); }
+.action-btn.primary { border-color: var(--accent); color: var(--accent); }
+.action-btn.primary:hover { background: rgba(84,242,255,0.12); border-color: var(--accent); }
+input[type="range"] { accent-color: var(--accent); }
 
 /* Modal */
 #modal-overlay {
@@ -339,48 +344,48 @@ html, body {
   align-items: center; justify-content: center;
   transition: background 0.3s var(--ease-out-quart);
 }
-#modal-overlay.active { display: flex; background: rgba(0,0,0,0.85); animation: modal-bg-in 0.3s var(--ease-out-quart) forwards; }
-@keyframes modal-bg-in { from { background: rgba(0,0,0,0); } to { background: rgba(0,0,0,0.85); } }
+#modal-overlay.active { display: flex; background: rgba(2,4,10,0.85); animation: modal-bg-in 0.3s var(--ease-out-quart) forwards; }
+@keyframes modal-bg-in { from { background: rgba(0,0,0,0); } to { background: rgba(2,4,10,0.85); } }
 #modal-content {
-  background: var(--crt-panel); border: 1px solid var(--crt-green-dim); border-radius: 4px;
+  background: var(--panel); border: 1px solid var(--lit); border-radius: 4px;
   padding: 20px 28px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto;
-  box-shadow: 0 0 30px rgba(0,255,65,0.1);
+  box-shadow: 0 0 30px rgba(84,242,255,0.08);
   animation: modal-content-in 0.35s var(--ease-out-expo) both;
 }
 @keyframes modal-content-in {
   from { opacity: 0; transform: scale(0.95) translateY(10px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
-#modal-content h2 { color: var(--crt-amber); font-size: 16px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 14px; text-align: center; }
-#modal-content p { color: var(--crt-text-dim); font-size: 12px; line-height: 1.6; margin-bottom: 10px; }
+#modal-content h2 { color: var(--accent); font-size: 16px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 14px; text-align: center; }
+#modal-content p { color: var(--text-dim); font-size: 12px; line-height: 1.6; margin-bottom: 10px; }
 .modal-actions { display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
 
 .htp-section { margin-bottom: 14px; }
-.htp-section h4 { color: var(--crt-amber); font-size: 11px; text-transform: uppercase; margin-bottom: 4px; }
-.htp-section li { color: var(--crt-text-dim); font-size: 11px; line-height: 1.5; padding-left: 12px; position: relative; list-style: none; }
-.htp-section li::before { content: ">"; position: absolute; left: 0; color: var(--crt-green); }
-.legend-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 11px; color: var(--crt-text-dim); }
+.htp-section h4 { color: var(--accent); font-size: 11px; text-transform: uppercase; margin-bottom: 4px; }
+.htp-section li { color: var(--text-dim); font-size: 11px; line-height: 1.5; padding-left: 12px; position: relative; list-style: none; }
+.htp-section li::before { content: ">"; position: absolute; left: 0; color: var(--accent-dim); }
+.legend-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 11px; color: var(--text-dim); }
 .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 
 /* Help tabs */
-.help-tabs { display: flex; gap: 2px; margin-bottom: 14px; border-bottom: 1px solid var(--crt-border); }
+.help-tabs { display: flex; gap: 2px; margin-bottom: 14px; border-bottom: 1px solid var(--border); }
 .help-tab {
   padding: 6px 14px; background: none; border: 1px solid transparent; border-bottom: none;
-  color: var(--crt-text-dim); font-family: var(--font-mono); font-size: 12px;
+  color: var(--text-dim); font-family: var(--font-mono); font-size: 12px;
   cursor: pointer; border-radius: 3px 3px 0 0; transition: color 0.2s, background 0.2s;
 }
-.help-tab:hover { color: var(--crt-green); background: rgba(0,255,65,0.05); }
-.help-tab.active { color: var(--crt-amber); border-color: var(--crt-border); background: var(--crt-panel); position: relative; }
-.help-tab.active::after { content: ""; position: absolute; bottom: -1px; left: 0; right: 0; height: 1px; background: var(--crt-panel); }
+.help-tab:hover { color: var(--white); background: rgba(219,228,251,0.05); }
+.help-tab.active { color: var(--accent); border-color: var(--border); background: var(--panel); position: relative; }
+.help-tab.active::after { content: ""; position: absolute; bottom: -1px; left: 0; right: 0; height: 1px; background: var(--panel); }
 .help-tab-content { display: none; }
 .help-tab-content.active { display: block; }
 
 /* Focus indicators — keyboard accessibility */
 *:focus-visible {
-  outline: 2px solid var(--crt-amber);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.card:focus-visible { outline-offset: 0; border-color: var(--crt-amber); }
+.card:focus-visible { outline-offset: 0; border-color: var(--accent); }
 .help-tab:focus-visible { outline-offset: -1px; }
 .action-btn:focus-visible { outline-offset: 1px; }
 
@@ -405,7 +410,7 @@ html, body {
   #game-container { height: auto; min-height: 100vh; grid-template-rows: auto auto auto; grid-template-columns: 1fr; grid-template-areas: "hud-top" "canvas" "sidebar"; }
   #hud-top { flex-wrap: wrap; gap: 6px; }
   #canvas-wrap { width: 100%; height: auto; aspect-ratio: 1; }
-  #sidebar { max-height: none; border-left: none; border-top: 1px solid var(--crt-border); }
+  #sidebar { max-height: none; border-left: none; border-top: 1px solid var(--border); }
   #siem-log { max-height: 220px; }
 }
 </style>
@@ -474,8 +479,8 @@ const NUM_ARCS = 6;
 const ARC_ANGLE = (Math.PI * 2) / NUM_ARCS;
 
 const ARCS = [
-  { id: 0, name: "DMZ",         color: "#00cccc", pairColor: "#00aaaa", pairIdx: 0 },
-  { id: 1, name: "Web Svc",     color: "#00eedd", pairColor: "#00aaaa", pairIdx: 0 },
+  { id: 0, name: "DMZ",         color: "#b47dff", pairColor: "#9466dd", pairIdx: 0 },
+  { id: 1, name: "Web Svc",     color: "#c9a2ff", pairColor: "#9466dd", pairIdx: 0 },
   { id: 2, name: "Corporate",   color: "#6699ff", pairColor: "#5577cc", pairIdx: 1 },
   { id: 3, name: "Engineering", color: "#88aaff", pairColor: "#5577cc", pairIdx: 1 },
   { id: 4, name: "Finance",     color: "#ff9933", pairColor: "#cc7722", pairIdx: 2 },
@@ -527,7 +532,7 @@ const CARD_TYPES = {
 
 // Threat types. hp is the number of hits to slay.
 const THREAT_TYPES = {
-  scriptKiddie: { name: "Script Kiddie", glyph: "SK", hp: 1, color: "#33ff33", boss: false, sides: 0 },   // Goblin — circle
+  scriptKiddie: { name: "Script Kiddie", glyph: "SK", hp: 1, color: "#4ade6a", boss: false, sides: 0 },   // Goblin — circle
   malware:      { name: "Malware",       glyph: "MW", hp: 2, color: "#ff6633", boss: false, sides: 4 },   // Orc — diamond
   apt:          { name: "APT",           glyph: "AP", hp: 3, color: "#ff3333", boss: false, sides: 6 },   // Troll — hexagon
   botnetCmd:    { name: "Botnet Cmdr",   glyph: "BC", hp: 3, color: "#ff00ff", boss: true,  sides: 8, onSpawn: "draw3", ability: "On arrival, draw 3 more tokens" },          // Goblin King
@@ -1365,13 +1370,13 @@ function clickFirewall(arcIdx) {
   if (ft.mode === "fortify") {
     G.fortified = arcIdx;
     log(`Firewall in ${ARCS[arcIdx].name} hardened — it now takes 2 hits.`);
-    addFlash(fx, fy, "#00ff41", 20);
+    addFlash(fx, fy, "#4ade6a", 20);
     sfxHarden();
     consumeCards([selectedCardIdx], "play");
   } else if (ft.mode === "build") {
     G.firewalls[arcIdx] = 1;
     log(`Firewall in ${ARCS[arcIdx].name} rebuilt!`);
-    addFlash(fx, fy, "#00ff41", 20);
+    addFlash(fx, fy, "#4ade6a", 20);
     sfxHarden();
     consumeCards([selectedCardIdx, ft.partnerIdx], "play");
   }
@@ -1652,8 +1657,7 @@ function resolveEffect(type) {
    ============================================================ */
 function render() {
   ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-  ctx.fillStyle = "#050505";
-  ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  ctx.drawImage(boardSurround(), 0, 0);
 
   // Draw arc sectors with pair colors, then ring borders
   for (const ring of RINGS) {
@@ -1693,7 +1697,7 @@ function render() {
     // Ring border circle
     ctx.beginPath();
     ctx.arc(CENTER, CENTER, ring.outer, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(0, 255, 65, 0.2)";
+    ctx.strokeStyle = "rgba(71, 96, 156, 0.55)";
     ctx.lineWidth = 1;
     ctx.stroke();
   }
@@ -1701,9 +1705,9 @@ function render() {
   // Core circle
   ctx.beginPath();
   ctx.arc(CENTER, CENTER, CORE_RADIUS, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(40, 30, 0, 0.4)";
+  ctx.fillStyle = "rgba(13, 20, 36, 0.85)";
   ctx.fill();
-  ctx.strokeStyle = "rgba(255, 176, 0, 0.4)";
+  ctx.strokeStyle = "rgba(71, 96, 156, 0.9)";
   ctx.lineWidth = 2;
   ctx.stroke();
 
@@ -1714,14 +1718,14 @@ function render() {
     ctx.beginPath();
     ctx.moveTo(CENTER, CENTER);
     ctx.lineTo(CENTER + Math.cos(angle) * RINGS[0].outer, CENTER + Math.sin(angle) * RINGS[0].outer);
-    ctx.strokeStyle = isBoundary ? "rgba(0, 255, 65, 0.25)" : "rgba(0, 255, 65, 0.08)";
+    ctx.strokeStyle = isBoundary ? "rgba(71, 96, 156, 0.7)" : "rgba(71, 96, 156, 0.25)";
     ctx.lineWidth = isBoundary ? 1.5 : 0.5;
     ctx.stroke();
   }
 
   // Ring labels — along the DMZ/Web separator line, offset above it
   ctx.font = "9px 'Courier New', monospace";
-  ctx.fillStyle = "rgba(0, 255, 65, 0.35)";
+  ctx.fillStyle = "rgba(154, 165, 198, 0.5)";
   ctx.textAlign = "center";
   const sepAngle = 1 * ARC_ANGLE - Math.PI / 2; // DMZ/Web boundary angle
   const perpOffset = -8; // pixels above the line (negative = CCW side)
@@ -1805,11 +1809,11 @@ function render() {
       // Firewall icon — brick wall with 3D side panel
       const fw = 20, fh = 22, sd = 6;
       const damaged = false;
-      const fwStroke = damaged ? "#ddaa00" : "#00ff41";
-      const fwFill = damaged ? "rgba(200, 160, 0, 0.2)" : "rgba(0, 200, 50, 0.2)";
-      const fwSideFill = damaged ? "rgba(160, 130, 0, 0.15)" : "rgba(0, 150, 40, 0.15)";
-      const fwSideStroke = damaged ? "#bb8800" : "#00cc33";
-      const fwTopFill = damaged ? "rgba(180, 140, 0, 0.12)" : "rgba(0, 180, 45, 0.12)";
+      const fwStroke = damaged ? "#ddaa00" : "#4ade6a";
+      const fwFill = damaged ? "rgba(200, 160, 0, 0.2)" : "rgba(74, 222, 106, 0.2)";
+      const fwSideFill = damaged ? "rgba(160, 130, 0, 0.15)" : "rgba(52, 170, 80, 0.15)";
+      const fwSideStroke = damaged ? "#bb8800" : "#34aa50";
+      const fwTopFill = damaged ? "rgba(180, 140, 0, 0.12)" : "rgba(60, 195, 92, 0.12)";
       ctx.save();
       ctx.translate(x, y);
 
@@ -1877,12 +1881,12 @@ function render() {
 
       // Hardened firewall — extra outline plus a "2" badge
       if (G.fortified === a) {
-        ctx.strokeStyle = "#ffb000";
+        ctx.strokeStyle = "#dbe4fb";
         ctx.lineWidth = 1.5;
         ctx.setLineDash([2, 2]);
         ctx.strokeRect(-fw/2 - 4, -fh/2 - 4, fw + 8, fh + 8);
         ctx.setLineDash([]);
-        ctx.fillStyle = "#ffb000";
+        ctx.fillStyle = "#dbe4fb";
         ctx.font = "bold 9px 'Courier New', monospace";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -1919,14 +1923,14 @@ function render() {
       const y = CENTER + Math.sin(angle) * FIREWALL_RADIUS;
       ctx.beginPath();
       ctx.arc(x, y, 24, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(0, 255, 65, 0.7)";
+      ctx.strokeStyle = "rgba(84, 242, 255, 0.8)";
       ctx.lineWidth = 2.5;
       ctx.setLineDash([5, 4]);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.beginPath();
       ctx.arc(x, y, 24, 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(0, 255, 65, 0.06)";
+      ctx.fillStyle = "rgba(84, 242, 255, 0.08)";
       ctx.fill();
     }
   }
@@ -1940,18 +1944,18 @@ function render() {
     const w = 12, h = 20, ov = 5; // half-width, total height, oval ry
 
     if (G.servers[a]) {
-      ctx.strokeStyle = "#ffb000";
+      ctx.strokeStyle = "#dbe4fb";
       ctx.lineWidth = 2;
 
       // Solid cylinder — bottom hidden, only front visible
       // 1. Fill body rectangle (covers everything between top and bottom)
-      ctx.fillStyle = "#7a5500";
+      ctx.fillStyle = "#273249";
       ctx.fillRect(x - w, y - h/2, w * 2, h);
 
       // 2. Cover bottom with solid fill (flat bottom, no visible ellipse)
       ctx.beginPath();
       ctx.ellipse(x, y + h/2, w, ov, 0, 0, Math.PI * 2);
-      ctx.fillStyle = "#7a5500";
+      ctx.fillStyle = "#273249";
       ctx.fill();
 
       // 3. Side lines
@@ -1978,7 +1982,7 @@ function render() {
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.ellipse(x, y - h/2, w, ov, 0, 0, Math.PI * 2);
-      ctx.fillStyle = "#c89000";
+      ctx.fillStyle = "#47609c";
       ctx.fill();
       ctx.stroke();
     } else {
@@ -2014,7 +2018,7 @@ function render() {
     const pos = getThreatPos(threat);
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, 28, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255, 176, 0, 0.7)";
+    ctx.strokeStyle = "rgba(84, 242, 255, 0.8)";
     ctx.lineWidth = 2.5;
     ctx.setLineDash([5, 4]);
     ctx.stroke();
@@ -2022,7 +2026,7 @@ function render() {
     // Clickable area fill
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, 28, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255, 176, 0, 0.06)";
+    ctx.fillStyle = "rgba(84, 242, 255, 0.08)";
     ctx.fill();
   }
 
@@ -2162,12 +2166,115 @@ function drawThreat(t) {
   // Honeypot indicator
   if (t.honeypotted) {
     ctx.font = `bold ${Math.round(8 * scale)}px 'Courier New', monospace`;
-    ctx.fillStyle = "#ffb000";
+    ctx.fillStyle = "#dbe4fb";
     ctx.textAlign = "center";
     ctx.fillText("\u2691", pos.x + r + 6, pos.y); // flag icon
   }
 
   ctx.restore();
+}
+
+/* The Internet around the board: a line-drawn scene in the corners the
+   round board leaves empty, after the scenery behind PumaTriage and
+   PumaHeart and in their colours. The network rings echo outward, a mesh of
+   hosts sits beyond them with a few lit, and one is hot: that is where the
+   threats come from. No text, and low contrast on purpose: it frames the board and never
+   competes with it. Drawn once, on a fixed seed, and stamped every frame. */
+let surroundCanvas = null;
+function boardSurround() {
+  if (surroundCanvas) return surroundCanvas;
+  surroundCanvas = document.createElement("canvas");
+  surroundCanvas.width = surroundCanvas.height = CANVAS_SIZE;
+  const c = surroundCanvas.getContext("2d");
+  let seed = 11;
+  const rnd = n => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
+  const S = CANVAS_SIZE, CLEAR = RINGS[0].outer + 30; // stay outside the pair labels
+
+  c.fillStyle = "#05070f";
+  c.fillRect(0, 0, S, S);
+  // Everything below is clipped to the square minus the board's disc.
+  c.save();
+  c.beginPath();
+  c.rect(0, 0, S, S);
+  c.arc(CENTER, CENTER, CLEAR, 0, Math.PI * 2, true);
+  c.clip();
+
+  // A slow glow off each corner, so the corners read as space rather than void.
+  for (const [x, y] of [[0, 0], [S, 0], [0, S], [S, S]]) {
+    const g = c.createRadialGradient(x, y, 0, x, y, 260);
+    g.addColorStop(0, "rgba(13, 20, 38, 0.9)");
+    g.addColorStop(1, "rgba(13, 20, 38, 0)");
+    c.fillStyle = g;
+    c.fillRect(0, 0, S, S);
+  }
+
+  // The rings carry on past the edge of the board.
+  c.strokeStyle = "#141d33";
+  c.lineWidth = 1;
+  c.setLineDash([2, 6]);
+  for (let r = CLEAR + 20; r < S * 0.71; r += 36) {
+    c.beginPath(); c.arc(CENTER, CENTER, r, 0, Math.PI * 2); c.stroke();
+  }
+  c.setLineDash([]);
+  // And so do the six segment dividers.
+  c.strokeStyle = "#141d33";
+  for (let a = 0; a < NUM_ARCS; a++) {
+    const ang = a * ARC_ANGLE - Math.PI / 2;
+    c.beginPath();
+    c.moveTo(CENTER + Math.cos(ang) * CLEAR, CENTER + Math.sin(ang) * CLEAR);
+    c.lineTo(CENTER + Math.cos(ang) * S, CENTER + Math.sin(ang) * S);
+    c.stroke();
+  }
+
+  // The hosts, each corner its own little network joined to its nearest two.
+  const nodes = [];
+  for (let i = 0; i < 2000 && nodes.length < 72; i++) {
+    const x = 14 + rnd(S - 28), y = 14 + rnd(S - 28);
+    if (Math.hypot(x - CENTER, y - CENTER) < CLEAR + 12) continue;
+    if (nodes.some(([nx, ny]) => Math.hypot(nx - x, ny - y) < 28)) continue;
+    nodes.push([x, y]);
+  }
+  const quad = ([x, y]) => (x < CENTER ? 0 : 1) + (y < CENTER ? 0 : 2);
+  const seen = new Set();
+  c.strokeStyle = "#1d2948";
+  c.lineWidth = 1.2;
+  nodes.forEach((a, i) => {
+    nodes.map((b, j) => [j, Math.hypot(a[0] - b[0], a[1] - b[1])])
+      .filter(([j]) => j !== i && quad(nodes[j]) === quad(a))
+      .sort((x, y) => x[1] - y[1]).slice(0, 2).forEach(([j]) => {
+        const k = i < j ? i + "-" + j : j + "-" + i;
+        if (seen.has(k)) return; seen.add(k);
+        c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(nodes[j][0], nodes[j][1]); c.stroke();
+      });
+  });
+  nodes.forEach(([x, y], i) => {
+    c.beginPath(); c.arc(x, y, 3.5, 0, Math.PI * 2);
+    c.fillStyle = "#0a0f1d"; c.fill();
+    c.strokeStyle = "#2a3960"; c.lineWidth = 1.5; c.stroke();
+    if (i % 4 === 0) {
+      c.beginPath(); c.arc(x, y, 1.8, 0, Math.PI * 2);
+      c.fillStyle = i % 12 === 0 ? "rgba(74, 222, 106, 0.4)" : "rgba(84, 242, 255, 0.4)"; c.fill();
+    }
+  });
+  // One host is hot.
+  const hot = nodes.reduce((m, n) => n[0] > CENTER && n[0] < S - 50 && n[1] > 50 && n[1] < CENTER && Math.hypot(n[0] - S, n[1]) < Math.hypot(m[0] - S, m[1]) ? n : m, [CENTER, CENTER]);
+  if (hot[0] !== CENTER) {
+    c.beginPath(); c.arc(hot[0], hot[1], 2.6, 0, Math.PI * 2); c.fillStyle = "rgba(255, 176, 0, 0.6)"; c.fill();
+    c.strokeStyle = "#ffb000"; c.lineWidth = 1.5;
+    for (const [r, al] of [[11, 0.3], [22, 0.14]]) {
+      c.globalAlpha = al; c.beginPath(); c.arc(hot[0], hot[1], r, 0, Math.PI * 2); c.stroke();
+    }
+    c.globalAlpha = 1;
+  }
+  c.restore();
+
+  // Corner brackets, like a viewfinder on the map.
+  c.strokeStyle = "#2a3960";
+  c.lineWidth = 2;
+  for (const [x, y, dx, dy] of [[8, 8, 1, 1], [S - 8, 8, -1, 1], [8, S - 8, 1, -1], [S - 8, S - 8, -1, -1]]) {
+    c.beginPath(); c.moveTo(x, y + dy * 26); c.lineTo(x, y); c.lineTo(x + dx * 26, y); c.stroke();
+  }
+  return surroundCanvas;
 }
 
 function adjustAlpha(hex, alpha) {
@@ -2402,7 +2509,7 @@ function updateHand() {
 
     // Card description
     const descText = def.kind === "dead"
-      ? `<span class="card-desc" style="color:var(--crt-red)">${def.desc}</span>`
+      ? `<span class="card-desc" style="color:var(--red)">${def.desc}</span>`
       : `<span class="card-desc">${def.desc}</span>`;
 
     el.innerHTML = `
@@ -2470,7 +2577,7 @@ function updateHand() {
     actions.appendChild(btn);
   } else if (G.phase === "play") {
     const btn = document.createElement("button");
-    btn.className = "action-btn amber";
+    btn.className = "action-btn primary";
     btn.textContent = "End Play Phase";
     btn.onclick = endPlayPhase;
     actions.appendChild(btn);
@@ -2565,25 +2672,25 @@ function renderRuleRow(key, def) {
     return `
       <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
         <div>
-          <span style="color:var(--crt-text-dim);font-size:12px;">${def.label}</span>
-          <div style="font-size:9px;color:var(--crt-text-dim);margin-top:1px;">${def.desc}</div>
+          <span style="color:var(--text-dim);font-size:12px;">${def.label}</span>
+          <div style="font-size:9px;color:var(--text-dim);margin-top:1px;">${def.desc}</div>
         </div>
         <button onclick="updateSlider('${key}', ${isOn ? 0 : 1}); showMainMenu();"
           style="padding:3px 12px;font-family:var(--font-mono);font-size:11px;cursor:pointer;border-radius:3px;flex-shrink:0;
-          border:1px solid ${isOn ? 'var(--crt-green-dim)' : 'var(--crt-red)'};
-          color:${isOn ? 'var(--crt-green)' : 'var(--crt-red)'};
-          background:${isOn ? 'rgba(0,255,65,0.1)' : 'rgba(255,51,51,0.1)'};">${isOn ? 'ON' : 'OFF'}</button>
+          border:1px solid ${isOn ? 'var(--green)' : 'var(--red)'};
+          color:${isOn ? 'var(--green)' : 'var(--red)'};
+          background:${isOn ? 'rgba(74,222,106,0.1)' : 'rgba(255,51,51,0.1)'};">${isOn ? 'ON' : 'OFF'}</button>
       </div>`;
   }
   return `
     <div style="margin-bottom:10px;">
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
-        <span style="color:var(--crt-text-dim)">${def.label}</span>
-        <span style="color:var(--crt-green);font-weight:bold;" id="slider-val-${key}">${displayVal}</span>
+        <span style="color:var(--text-dim)">${def.label}</span>
+        <span style="color:var(--white);font-weight:bold;" id="slider-val-${key}">${displayVal}</span>
       </div>
       <input type="range" min="${def.min}" max="${def.max}" step="${step}" value="${val}"
         style="width:100%;" oninput="updateSlider('${key}', this.value)" aria-label="${def.label}">
-      <div style="font-size:9px;color:var(--crt-text-dim);margin-top:1px;">${def.desc}</div>
+      <div style="font-size:9px;color:var(--text-dim);margin-top:1px;">${def.desc}</div>
     </div>`;
 }
 
@@ -2613,12 +2720,12 @@ function showMainMenu() {
     <div style="display:flex;gap:4px;justify-content:center;margin-bottom:14px;flex-wrap:wrap;">
       ${presetBtns}
     </div>
-    <div style="border-top:1px solid var(--crt-border);padding-top:12px;">
-      <h3 style="font-size:11px;color:var(--crt-amber);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Base Rules</h3>
-      <p style="font-size:9px;color:var(--crt-text-dim);margin-bottom:10px;font-style:italic;">Standard is the full base game. Turning bosses or events off makes it easier.</p>
+    <div style="border-top:1px solid var(--border);padding-top:12px;">
+      <h3 style="font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Base Rules</h3>
+      <p style="font-size:9px;color:var(--text-dim);margin-bottom:10px;font-style:italic;">Standard is the full base game. Turning bosses or events off makes it easier.</p>
       ${baseHTML}
-      <h3 style="font-size:11px;color:var(--crt-amber);text-transform:uppercase;letter-spacing:1px;margin:12px 0 4px;">Add-ons</h3>
-      <p style="font-size:9px;color:var(--crt-text-dim);margin-bottom:10px;font-style:italic;">Extra rules layered on top of the base game. Off by default.</p>
+      <h3 style="font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin:12px 0 4px;">Add-ons</h3>
+      <p style="font-size:9px;color:var(--text-dim);margin-bottom:10px;font-style:italic;">Extra rules layered on top of the base game. Off by default.</p>
       ${addonHTML}
     </div>
     <div class="modal-actions" style="margin-top:14px;">
@@ -2741,7 +2848,7 @@ function showHowToPlay(tab) {
         <h4>Segment Pairs</h4>
         <ul>
           <li>Segment-specific cards cover 2 segments each, matching the board colours:</li>
-          <li><b>DMZ / Web Services</b> — teal/cyan</li>
+          <li><b>DMZ / Web Services</b> — violet</li>
           <li><b>Corporate / Engineering</b> — blue</li>
           <li><b>Finance / Executive</b> — amber/orange</li>
         </ul>
@@ -2752,7 +2859,7 @@ function showHowToPlay(tab) {
     <div class="${panelCls("threats")}">
       <div class="htp-section">
         <h4>Standard Threats — 34</h4>
-        <div class="legend-row"><span class="legend-dot" style="background:#33ff33"></span> <b>Script Kiddie</b> (1 HP) — Weak but numerous. 12 in deck</div>
+        <div class="legend-row"><span class="legend-dot" style="background:#4ade6a"></span> <b>Script Kiddie</b> (1 HP) — Weak but numerous. 12 in deck</div>
         <div class="legend-row"><span class="legend-dot" style="background:#ff6633"></span> <b>Malware</b> (2 HP) — Takes 2 hits. 12 in deck</div>
         <div class="legend-row"><span class="legend-dot" style="background:#ff3333"></span> <b>APT</b> (3 HP) — Takes 3 hits. 10 in deck</div>
       </div>
@@ -2783,11 +2890,11 @@ function showHowToPlay(tab) {
       </div>
       <div class="htp-section">
         <h4>Visual Legend</h4>
-        <div class="legend-row"><span class="legend-dot" style="background:#00ff41"></span> Firewall (standing)</div>
+        <div class="legend-row"><span class="legend-dot" style="background:#4ade6a"></span> Firewall (standing)</div>
         <div class="legend-row"><span style="color:#ff3333;font-size:14px;">XX</span> Firewall (destroyed)</div>
-        <div class="legend-row"><span class="legend-dot" style="background:#ffb000"></span> Server (standing)</div>
+        <div class="legend-row"><span class="legend-dot" style="background:#dbe4fb"></span> Server (standing)</div>
         <div class="legend-row"><span style="color:#ff3333;font-size:14px;">XX</span> Server (destroyed)</div>
-        <div class="legend-row"><span style="color:#ffb000;font-size:14px;">⚑</span> Honeypot on a threat</div>
+        <div class="legend-row"><span style="color:#dbe4fb;font-size:14px;">⚑</span> Honeypot on a threat</div>
       </div>
     </div>
 
@@ -2842,10 +2949,10 @@ function showHowToPlay(tab) {
     <!-- ABOUT TAB -->
     <div class="${panelCls("about")}">
       <div style="text-align:center;padding:40px 20px;">
-        <p style="font-size:14px;color:var(--crt-amber);margin-bottom:16px;">PumaPanic</p>
+        <p style="font-size:14px;color:var(--accent);margin-bottom:16px;">PumaPanic</p>
         <p style="font-size:12px;margin-bottom:8px;">Cyber Tower Defense</p>
-        <p style="margin-bottom:24px;">Built by <a href="https://www.greykit.com" target="_blank" rel="noopener" style="color:var(--crt-green);text-decoration:underline;">greykit.com</a></p>
-        <p style="font-size:10px;color:var(--crt-text-dim);">Inspired by Castle Panic by Justin De Witt / Fireside Games</p>
+        <p style="margin-bottom:24px;">Built by <a href="https://www.greykit.com" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">greykit.com</a></p>
+        <p style="font-size:10px;color:var(--text-dim);">Inspired by Castle Panic by Justin De Witt / Fireside Games</p>
       </div>
     </div>
 
@@ -2868,14 +2975,14 @@ function showGameOver(won) {
   if (won) grade = serversLeft === 6 ? "S" : serversLeft >= 5 ? "A" : serversLeft >= 3 ? "B" : "C";
   content.innerHTML = `
     <h2>${won ? "NETWORK SECURED" : "NETWORK COMPROMISED"}</h2>
-    <p style="text-align:center;font-size:14px;color:${won ? 'var(--crt-green)' : 'var(--crt-red)'};">
+    <p style="text-align:center;font-size:14px;color:${won ? 'var(--green)' : 'var(--red)'};">
       ${won ? pick(FLAVOR.win) : pick(FLAVOR.lose)}
     </p>
     <p>Threats slain: ${G.slain}</p>
     <p>Servers remaining: ${serversLeft}/6</p>
     <p>Firewalls remaining: ${fwLeft}/6</p>
     <p>Turns taken: ${G.turn}</p>
-    <p style="font-size:18px;color:var(--crt-amber);text-align:center;margin-top:12px;">
+    <p style="font-size:18px;color:var(--accent);text-align:center;margin-top:12px;">
       Score: ${Math.max(0, score)} — Grade: ${grade}
     </p>
     <div class="modal-actions">
@@ -3002,7 +3109,7 @@ function showTutorialStep() {
     <h2 style="font-size:14px;">${step.title}</h2>
     <p>${step.text.replace(/\n/g, "<br>")}</p>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;">
-      <span style="color:var(--crt-text-dim);font-size:10px;">${tutorialStep + 1}/${TUTORIAL_STEPS.length}</span>
+      <span style="color:var(--text-dim);font-size:10px;">${tutorialStep + 1}/${TUTORIAL_STEPS.length}</span>
       <div style="display:flex;gap:6px;">
         ${tutorialStep > 0 ? '<button class="action-btn" onclick="tutorialStep--;showTutorialStep();" style="font-size:10px;padding:3px 8px;">Back</button>' : ''}
         ${tutorialStep < TUTORIAL_STEPS.length - 1
@@ -3027,9 +3134,9 @@ function init() {
   // Continuous render loop for animations
   setInterval(renderLoop, 16);
 
-  console.log("%cPumaPanic", "color:#ffb000;font-size:20px;font-weight:bold;font-family:monospace;");
-  console.log("%cPumaPanic — greykit.com", "color:#00ff41;font-size:12px;font-family:monospace;");
-  console.log("%cInspecting the source? That's the spirit. Never trust, always verify.", "color:#00aa2a;font-size:11px;font-family:monospace;");
+  console.log("%cPumaPanic", "color:#54f2ff;font-size:20px;font-weight:bold;font-family:monospace;");
+  console.log("%cPumaPanic — greykit.com", "color:#dbe4fb;font-size:12px;font-family:monospace;");
+  console.log("%cInspecting the source? That's the spirit. Never trust, always verify.", "color:#7d8aa8;font-size:11px;font-family:monospace;");
 
   showMainMenu();
 }
