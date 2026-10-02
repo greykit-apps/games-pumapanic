@@ -1654,8 +1654,7 @@ function resolveEffect(type) {
    ============================================================ */
 function render() {
   ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-  ctx.fillStyle = "#05070f";
-  ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  ctx.drawImage(boardSurround(), 0, 0);
 
   // Draw arc sectors with pair colors, then ring borders
   for (const ring of RINGS) {
@@ -2170,6 +2169,129 @@ function drawThreat(t) {
   }
 
   ctx.restore();
+}
+
+/* The Internet around the board: a line-drawn scene in the corners the
+   round board leaves empty, after the scenery behind PumaTriage and
+   PumaHeart and in their colours. The network rings echo outward, a mesh of
+   hosts sits beyond them with a few lit, and one is hot: that is where the
+   threats come from. Low contrast on purpose: it frames the board and never
+   competes with it. Drawn once, on a fixed seed, and stamped every frame. */
+let surroundCanvas = null;
+function boardSurround() {
+  if (surroundCanvas) return surroundCanvas;
+  surroundCanvas = document.createElement("canvas");
+  surroundCanvas.width = surroundCanvas.height = CANVAS_SIZE;
+  const c = surroundCanvas.getContext("2d");
+  let seed = 11;
+  const rnd = n => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed % n; };
+  const S = CANVAS_SIZE, CLEAR = RINGS[0].outer + 30; // stay outside the pair labels
+
+  c.fillStyle = "#05070f";
+  c.fillRect(0, 0, S, S);
+  // Everything below is clipped to the square minus the board's disc.
+  c.save();
+  c.beginPath();
+  c.rect(0, 0, S, S);
+  c.arc(CENTER, CENTER, CLEAR, 0, Math.PI * 2, true);
+  c.clip();
+
+  // A slow glow off each corner, so the corners read as space rather than void.
+  for (const [x, y] of [[0, 0], [S, 0], [0, S], [S, S]]) {
+    const g = c.createRadialGradient(x, y, 0, x, y, 260);
+    g.addColorStop(0, "rgba(13, 20, 38, 0.9)");
+    g.addColorStop(1, "rgba(13, 20, 38, 0)");
+    c.fillStyle = g;
+    c.fillRect(0, 0, S, S);
+  }
+
+  // The rings carry on past the edge of the board.
+  c.strokeStyle = "#141d33";
+  c.lineWidth = 1;
+  c.setLineDash([2, 6]);
+  for (let r = CLEAR + 20; r < S * 0.71; r += 36) {
+    c.beginPath(); c.arc(CENTER, CENTER, r, 0, Math.PI * 2); c.stroke();
+  }
+  c.setLineDash([]);
+  // And so do the six segment dividers.
+  c.strokeStyle = "#141d33";
+  for (let a = 0; a < NUM_ARCS; a++) {
+    const ang = a * ARC_ANGLE - Math.PI / 2;
+    c.beginPath();
+    c.moveTo(CENTER + Math.cos(ang) * CLEAR, CENTER + Math.sin(ang) * CLEAR);
+    c.lineTo(CENTER + Math.cos(ang) * S, CENTER + Math.sin(ang) * S);
+    c.stroke();
+  }
+
+  // The hosts, each corner its own little network joined to its nearest two.
+  // The two label boxes stay clear.
+  const quiet = [[0, 0, 200, 64], [S - 200, S - 64, S, S]];
+  const nodes = [];
+  for (let i = 0; i < 2000 && nodes.length < 72; i++) {
+    const x = 14 + rnd(S - 28), y = 14 + rnd(S - 28);
+    if (Math.hypot(x - CENTER, y - CENTER) < CLEAR + 12) continue;
+    if (quiet.some(([x0, y0, x1, y1]) => x > x0 && x < x1 && y > y0 && y < y1)) continue;
+    if (nodes.some(([nx, ny]) => Math.hypot(nx - x, ny - y) < 28)) continue;
+    nodes.push([x, y]);
+  }
+  const quad = ([x, y]) => (x < CENTER ? 0 : 1) + (y < CENTER ? 0 : 2);
+  const seen = new Set();
+  c.strokeStyle = "#1d2948";
+  c.lineWidth = 1.2;
+  nodes.forEach((a, i) => {
+    nodes.map((b, j) => [j, Math.hypot(a[0] - b[0], a[1] - b[1])])
+      .filter(([j]) => j !== i && quad(nodes[j]) === quad(a))
+      .sort((x, y) => x[1] - y[1]).slice(0, 2).forEach(([j]) => {
+        const k = i < j ? i + "-" + j : j + "-" + i;
+        if (seen.has(k)) return; seen.add(k);
+        c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(nodes[j][0], nodes[j][1]); c.stroke();
+      });
+  });
+  nodes.forEach(([x, y], i) => {
+    c.beginPath(); c.arc(x, y, 3.5, 0, Math.PI * 2);
+    c.fillStyle = "#0a0f1d"; c.fill();
+    c.strokeStyle = "#2a3960"; c.lineWidth = 1.5; c.stroke();
+    if (i % 4 === 0) {
+      c.beginPath(); c.arc(x, y, 1.8, 0, Math.PI * 2);
+      c.fillStyle = i % 12 === 0 ? "rgba(74, 222, 106, 0.4)" : "rgba(84, 242, 255, 0.4)"; c.fill();
+    }
+  });
+  // One host is hot.
+  const hot = nodes.reduce((m, n) => n[0] > CENTER && n[0] < S - 50 && n[1] > 50 && n[1] < CENTER && Math.hypot(n[0] - S, n[1]) < Math.hypot(m[0] - S, m[1]) ? n : m, [CENTER, CENTER]);
+  if (hot[0] !== CENTER) {
+    c.beginPath(); c.arc(hot[0], hot[1], 2.6, 0, Math.PI * 2); c.fillStyle = "rgba(255, 176, 0, 0.6)"; c.fill();
+    c.strokeStyle = "#ffb000"; c.lineWidth = 1.5;
+    for (const [r, al] of [[11, 0.3], [22, 0.14]]) {
+      c.globalAlpha = al; c.beginPath(); c.arc(hot[0], hot[1], r, 0, Math.PI * 2); c.stroke();
+    }
+    c.globalAlpha = 1;
+  }
+  c.restore();
+
+  // Corner brackets, like a viewfinder on the map.
+  c.strokeStyle = "#2a3960";
+  c.lineWidth = 2;
+  for (const [x, y, dx, dy] of [[8, 8, 1, 1], [S - 8, 8, -1, 1], [8, S - 8, 1, -1], [S - 8, S - 8, -1, -1]]) {
+    c.beginPath(); c.moveTo(x, y + dy * 26); c.lineTo(x, y); c.lineTo(x + dx * 26, y); c.stroke();
+  }
+
+  // Two labels, in the corners the mesh leaves quietest.
+  c.textBaseline = "alphabetic";
+  c.textAlign = "left";
+  c.font = "600 13px 'Courier New', monospace";
+  c.fillStyle = "rgba(84, 242, 255, 0.4)";
+  c.fillText("I N T E R N E T", 22, 34);
+  c.font = "9px 'Courier New', monospace";
+  c.fillStyle = "rgba(139, 150, 184, 0.5)";
+  c.fillText("UNTRUSTED · 0.0.0.0/0", 22, 48);
+  c.textAlign = "right";
+  c.font = "600 13px 'Courier New', monospace";
+  c.fillStyle = "rgba(84, 242, 255, 0.4)";
+  c.fillText("N E T - D E F", S - 22, S - 40);
+  c.font = "9px 'Courier New', monospace";
+  c.fillStyle = "rgba(139, 150, 184, 0.5)";
+  c.fillText("6 SEGMENTS · 6 SERVERS", S - 22, S - 26);
+  return surroundCanvas;
 }
 
 function adjustAlpha(hex, alpha) {
