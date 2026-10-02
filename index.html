@@ -2175,7 +2175,7 @@ function drawThreat(t) {
    round board leaves empty, after the scenery behind PumaTriage and
    PumaHeart and in their colours. The network rings echo outward, a mesh of
    hosts sits beyond them with a few lit, and one is hot: that is where the
-   threats come from. Low contrast on purpose: it frames the board and never
+   threats come from. No text, and low contrast on purpose: it frames the board and never
    competes with it. Drawn once, on a fixed seed, and stamped every frame. */
 let surroundCanvas = null;
 function boardSurround() {
@@ -2224,13 +2224,10 @@ function boardSurround() {
   }
 
   // The hosts, each corner its own little network joined to its nearest two.
-  // The two label boxes stay clear.
-  const quiet = [[0, 0, 200, 64], [S - 200, S - 64, S, S]];
   const nodes = [];
   for (let i = 0; i < 2000 && nodes.length < 72; i++) {
     const x = 14 + rnd(S - 28), y = 14 + rnd(S - 28);
     if (Math.hypot(x - CENTER, y - CENTER) < CLEAR + 12) continue;
-    if (quiet.some(([x0, y0, x1, y1]) => x > x0 && x < x1 && y > y0 && y < y1)) continue;
     if (nodes.some(([nx, ny]) => Math.hypot(nx - x, ny - y) < 28)) continue;
     nodes.push([x, y]);
   }
@@ -2274,23 +2271,6 @@ function boardSurround() {
   for (const [x, y, dx, dy] of [[8, 8, 1, 1], [S - 8, 8, -1, 1], [8, S - 8, 1, -1], [S - 8, S - 8, -1, -1]]) {
     c.beginPath(); c.moveTo(x, y + dy * 26); c.lineTo(x, y); c.lineTo(x + dx * 26, y); c.stroke();
   }
-
-  // Two labels, in the corners the mesh leaves quietest.
-  c.textBaseline = "alphabetic";
-  c.textAlign = "left";
-  c.font = "600 13px 'Courier New', monospace";
-  c.fillStyle = "rgba(84, 242, 255, 0.4)";
-  c.fillText("I N T E R N E T", 22, 34);
-  c.font = "9px 'Courier New', monospace";
-  c.fillStyle = "rgba(139, 150, 184, 0.5)";
-  c.fillText("UNTRUSTED · 0.0.0.0/0", 22, 48);
-  c.textAlign = "right";
-  c.font = "600 13px 'Courier New', monospace";
-  c.fillStyle = "rgba(84, 242, 255, 0.4)";
-  c.fillText("N E T - D E F", S - 22, S - 40);
-  c.font = "9px 'Courier New', monospace";
-  c.fillStyle = "rgba(139, 150, 184, 0.5)";
-  c.fillText("6 SEGMENTS · 6 SERVERS", S - 22, S - 26);
   return surroundCanvas;
 }
 
