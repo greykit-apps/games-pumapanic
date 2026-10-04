@@ -1,0 +1,14 @@
+{
+  "name": "PumaPanic",
+  "short_name": "PumaPanic",
+  "description": "A cybersecurity tower-defense card game. Defend your network from waves of cyber threats, turn by turn, with the cards in your hand. Inspired by Castle Panic.",
+  "start_url": ".",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#05070f",
+  "theme_color": "#05070f",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
