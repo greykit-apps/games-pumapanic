@@ -3662,8 +3662,33 @@ function showSettings() {
     <h3 style="font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Sound</h3>
     <div style="display:flex;gap:4px;justify-content:center;margin-bottom:8px;">${pill(!_muted, "On", _muted)}${pill(_muted, "Off", !_muted)}</div>
     <p style="font-size:10px;color:var(--text-dim);text-align:center;">The speaker in the game's header switches it too.</p>
+    <h3 style="font-size:11px;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">This browser</h3>
+    <div style="display:flex;gap:4px;justify-content:center;margin-bottom:8px;"><button class="action-btn" style="font-size:10px;padding:4px 10px;" onclick="confirmForget();">Forget everything</button></div>
+    <p style="font-size:10px;color:var(--text-dim);text-align:center;">Clears everything PumaPanic keeps in this browser: that you have seen the tutorial. A game in progress ends.</p>
     <div class="modal-actions"><button class="action-btn" onclick="closeModal();">Close</button></div>`;
   openModal();
+}
+function confirmForget() {
+  const c = document.getElementById("modal-content");
+  c.dataset.dismissable = "true"; c.dataset.help = "false";
+  c.innerHTML = `<h2>Forget everything?</h2><p style="text-align:center;">Forget everything PumaPanic has saved in this browser, and end any game in progress? This cannot be undone.</p>
+    <div class="modal-actions"><button class="action-btn" onclick="forgetEverything();">Forget everything</button><button class="action-btn" style="opacity:0.7" onclick="showSettings();">Cancel</button></div>`;
+  openModal();
+}
+/* Settings' "Forget everything" (games-meta STANDARD.md): every key PumaPanic
+   owns, found by its prefix so a key added later is not one this misses, and
+   only those -- every game on greykit.com shares one origin, so one storage. */
+function forgetEverything() {
+  for (const area of ["localStorage", "sessionStorage"]) {
+    try {
+      const s = window[area];
+      for (let i = s.length - 1; i >= 0; i--) {
+        const k = s.key(i);
+        if (k && k.startsWith("pumapanic")) s.removeItem(k);
+      }
+    } catch (e) { /* no storage */ }
+  }
+  location.reload();
 }
 /* The title's keys, ahead of the game's: true when the key is spent. A
    dialog over the title has the keys to itself. */
