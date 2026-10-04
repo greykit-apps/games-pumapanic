@@ -32,7 +32,7 @@ You win when the token deck is empty, the board is clear, and at least one serve
 
 - **Faithful base-game rules** — 49-card deck, 49-token threat deck, draw/discard/play/advance/spawn turn structure, two-card firewall rebuilds, hardened firewalls, outages, lateral movement
 - **Add-ons in the difficulty system** — Everything not in the base game is an opt-in house rule: Active Defense, Escalation cards, the Nation State boss, Zero-Day event tokens, Misconfigured dead cards
-- **3 presets** — Beginner, Standard (the full base game), Hard
+- **3 presets** — Beginner, Standard (the full base game), Hard, under **Custom game** on the title screen; **New quick game** starts at once with the rules as they stand
 - **Animated events** — Smooth threat movement, FLIP card animations, screen pulse on critical events, colour-coded SIEM feed
 - **Tactical look** — the cyan-on-navy palette PumaRally, PumaTycoon and PumaTriage share, monospace terminal type
 - **Sound effects** — Web Audio API procedurally generated retro sounds (mutable)
