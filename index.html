@@ -3426,8 +3426,10 @@ const TUTORIAL_STEPS = [
 
 let tutorialStep = 0;
 function showTutorial() {
-  if (localStorage.getItem("pumapanic_tutorialSeen3")) return;
-  localStorage.setItem("pumapanic_tutorialSeen3", "1");
+  try {
+    if (localStorage.getItem("pumapanic_tutorialSeen3")) return;
+    localStorage.setItem("pumapanic_tutorialSeen3", "1");
+  } catch (e) { /* no storage: show it, and every time */ }
   tutorialStep = 0;
   showTutorialStep();
 }
