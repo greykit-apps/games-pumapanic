@@ -359,6 +359,9 @@ input[type="range"] { accent-color: var(--accent); }
 #modal-content h2 { color: var(--accent); font-size: 16px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 14px; text-align: center; }
 #modal-content p { color: var(--text-dim); font-size: 12px; line-height: 1.6; margin-bottom: 10px; }
 .modal-actions { display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+/* greykit.games canon §1 — the credit; link styled here, not inline */
+#modal-content .gk-credit { text-align: center; }
+.gk-credit a { color: var(--accent); text-decoration: underline; }
 
 .htp-section { margin-bottom: 14px; }
 .htp-section h4 { color: var(--accent); font-size: 11px; text-transform: uppercase; margin-bottom: 4px; }
@@ -2732,6 +2735,7 @@ function showMainMenu() {
       <button class="action-btn" onclick="closeModal(); newGame(); showTutorial();">Start Game</button>
       <button class="action-btn" style="opacity:0.7" onclick="showHowToPlay();">How to Play</button>
     </div>
+    <p class="gk-credit" style="font-size:10px;margin:14px 0 0;">Built by <a href="https://greykit.com/" target="_blank" rel="noopener">greykit.com</a></p>
   `;
   openModal();
 }
@@ -2951,7 +2955,7 @@ function showHowToPlay(tab) {
       <div style="text-align:center;padding:40px 20px;">
         <p style="font-size:14px;color:var(--accent);margin-bottom:16px;">PumaPanic</p>
         <p style="font-size:12px;margin-bottom:8px;">Cyber Tower Defense</p>
-        <p style="margin-bottom:24px;">Built by <a href="https://www.greykit.com" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline;">greykit.com</a></p>
+        <p class="gk-credit" style="margin-bottom:24px;">Built by <a href="https://greykit.com/" target="_blank" rel="noopener">greykit.com</a></p>
         <p style="font-size:10px;color:var(--text-dim);">Inspired by Castle Panic by Justin De Witt / Fireside Games</p>
       </div>
     </div>
