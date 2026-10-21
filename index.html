@@ -375,6 +375,13 @@ body.on-title #game-container { visibility: hidden; }
    block the board draws in front of each server, in its green -- the face,
    its top and its right side */
 #title .gk-title { --gk-table-edge: #4ade6a; --gk-table-ratio: 0.96; --gk-table-head: 0.12; }
+/* In step with the quicker entrance (finish()'s timing, in init): each line
+   of the name settles faster than canon's .9s, and the pieces and counters
+   come down closer together than canon's 140ms and 130ms. A piece's own
+   fall keeps canon's .5s, which gktPlace's knock is timed to. */
+#title .gk-title.gkt.gki-intro h1 > span.gki-on { animation-duration: .45s; }
+#title .gk-title.gkt.gkt-tiles.gk-rise .gk-menu > .gk-pr { animation-delay: calc(var(--i) * 100ms); }
+#title .gk-title.gkt.gk-rise .gk-menu .gk-util .gk-pr { animation-delay: calc(var(--i) * 100ms + 100ms); }
 /* the courses of the wall, faint, under the words */
 #title .gk-title.gkt-tiles .gk-menu > button::after {
   background: repeating-linear-gradient(transparent 0 calc(25% - 1px), color-mix(in srgb, #4ade6a 9%, transparent) calc(25% - 1px) 25%),
@@ -4927,6 +4934,10 @@ function init() {
     more: ["perimeter up: 6 servers online"],
     title: document.querySelector("#title .gk-title"),
     name: "lines",
+    /* much quicker than canon's (600, 700, 3000, 4200): the name is down
+       within a second of the boot, and the hand starts landing as its last
+       line does, with no pause between them (as PumaTriage's) */
+    timing: { name: 0, step: 220, menu: 380, done: 1400 },
     toggles: titleToggles(),
     tick: () => titleSfx(gktFlick, 0.3),
     onContinue: () => { const ac = titleAudio(); if (ac && ac.state !== "running") ac.resume().catch(() => {}); },
