@@ -371,20 +371,14 @@ body.on-title #game-container { visibility: hidden; }
   width: var(--pp-table); height: var(--pp-table); margin: calc(var(--pp-table) / -2) 0 0 calc(var(--pp-table) / -2);
   --pp-table: min(86vh, 62vw); }
 @media (max-width: 640px) { .gk-title > .scene > canvas.pp-table { --pp-table: min(86vh, 118vw); } }
-/* the hand is PumaPanic's own cards, as the sidebar deals them -- not
-   playing cards: no rank in the corners, no pips, no patterned back. The
-   name in bold top left, the key small top right, the line under it dim */
-#title .gk-title.gkt .gk-menu > button { justify-content: flex-start; align-items: flex-start; gap: 6px;
-  padding: 30px 12px 12px; text-align: left; border: 2px solid var(--line); border-radius: 5px;
-  box-shadow: 0 10px 26px rgba(0,0,0,.5); }
-#title .gk-title.gkt .gk-menu > button > kbd { top: 9px; left: auto; right: 10px; font-size: 11px; font-weight: 400; }
-#title .gk-title.gkt .gk-menu > button > kbd::after { content: none; }
-#title .gk-title.gkt .gkt-ix { display: none; }
-#title .gk-title.gkt .gk-menu > button:focus { background: color-mix(in srgb, var(--accent) 12%, var(--k-card));
-  box-shadow: 0 20px 44px rgba(0,0,0,.6), 0 0 16px rgba(84,242,255,.25); }
-#title .gk-title.gkt .gk-menu > button:focus .gk-lbl { color: var(--accent); }
-/* a card's back, while it is dealt: the panel, plain */
-#title .gk-title.gkt .gk-menu > button::after { inset: -2px; border: 2px solid var(--line); background: var(--panel); box-shadow: none; }
+/* the hand is the board's own pieces, not playing cards: firewalls, the
+   block the board draws in front of each server, in its green -- the face,
+   its top and its right side */
+#title .gk-title { --gk-table-edge: #4ade6a; --gk-table-ratio: 0.96; --gk-table-head: 0.12; }
+/* the courses of the wall, faint, under the words */
+#title .gk-title.gkt-tiles .gk-menu > button::after {
+  background: repeating-linear-gradient(transparent 0 calc(25% - 1px), color-mix(in srgb, #4ade6a 9%, transparent) calc(25% - 1px) 25%),
+    linear-gradient(color-mix(in srgb, var(--k-edge) 14%, var(--k-card)), var(--k-card) 60%); }
 
 #modal-overlay {
   display: none; position: fixed; inset: 0; background: rgba(0,0,0,0); z-index: 100;
@@ -4810,9 +4804,11 @@ function openTitle() {
   gkTable(t, {
     box: ["1 player", "6 servers to hold", "49 tokens"],
     tilt: true,
-    /* a hand dealt from the game's own deck: the cards are PumaPanic's,
-       not playing cards (the CSS above) */
-    deal: () => titleSfx(gktDeal, 0.4),
+    /* not playing cards: the hand is a rank of firewalls, the block the
+       board draws, its top and right side bevelled away */
+    pieces: "tiles",
+    shape: "polygon(0 12%,23% 0,100% 0,100% 88%,77% 100%,0 100%)",
+    deal: () => titleSfx(gktPlace, 0.4),
     chit: () => titleSfx(gktChit, 0.3),
   });
   document.body.classList.add("on-title");
